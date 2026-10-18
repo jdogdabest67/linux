@@ -102,6 +102,34 @@
   const signalStatus = $("signalStatus");
   const signalOutput = $("signalOutput");
 
+  // Remember the backend URL and session locally so the user does not need
+  // to retype them every time this page is opened on the same device/browser.
+  const savedConfigKey = "joygpt-signal-config-v1";
+  function loadSavedConfig() {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(savedConfigKey) || "null");
+      if (saved && typeof saved.endpoint === "string" && !endpointInput.value.trim()) {
+        endpointInput.value = saved.endpoint;
+      }
+      if (saved && typeof saved.session === "string") {
+        sessionInput.value = saved.session;
+      }
+      if (saved && typeof saved.endpoint === "string" && saved.endpoint.trim()) {
+        signalStatus.textContent = "Saved backend URL loaded for this browser. Ready to test.";
+      }
+    } catch (_) {
+      // Storage may be disabled in private or restricted browser modes.
+    }
+  }
+
+  function saveSignalConfig(endpoint, session) {
+    try {
+      window.localStorage.setItem(savedConfigKey, JSON.stringify({ endpoint, session }));
+    } catch (_) {
+      // The page still works if local storage is unavailable.
+    }
+  }
+
   function getSignalConfig() {
     const endpoint = endpointInput.value.trim().replace(/\/$/, "");
     const session = sessionInput.value.trim();
@@ -110,6 +138,7 @@
     try { parsed = new URL(endpoint); } catch (_) { throw new Error("Backend URL is not valid."); }
     if (parsed.protocol !== "https:") throw new Error("Use an HTTPS Worker URL.");
     if (!session) throw new Error("Enter the same session code on both devices.");
+    saveSignalConfig(endpoint, session);
     return { endpoint, session };
   }
 
@@ -363,5 +392,6 @@
     }
   });
 
+  loadSavedConfig();
   showApiChecks();
 })();
