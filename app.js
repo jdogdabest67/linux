@@ -333,6 +333,95 @@
     $("remoteButtonState").textContent = "Local webpage button activated " + demoPressCount + " time(s).";
   });
 
+  // Read-only Switch/browser environment diagnostics. No permissions are requested.
+  function runSwitchTests() {
+    const output = $("switchTestsOutput");
+    const status = $("switchTestsStatus");
+    const rows = [];
+    const add = (label, value) => rows.push(label.padEnd(31, " ") + String(value));
+    const safe = (fn, fallback = "unavailable") => {
+      try {
+        const value = fn();
+        return value === undefined ? "undefined" : value === null ? "null" : value;
+      } catch (error) {
+        return "THREW " + error.name + ": " + error.message;
+      }
+    };
+    const yesNo = (value) => value ? "yes" : "no";
+
+    add("Page URL origin", safe(() => location.origin));
+    add("Page protocol", safe(() => location.protocol));
+    add("Secure context", safe(() => yesNo(window.isSecureContext)));
+    add("User agent", safe(() => navigator.userAgent));
+    add("Platform", safe(() => navigator.platform));
+    add("Vendor", safe(() => navigator.vendor));
+    add("Language", safe(() => navigator.language));
+    add("Languages", safe(() => Array.from(navigator.languages || []).join(", ") || "none reported"));
+    add("Online flag", safe(() => yesNo(navigator.onLine)));
+    add("Cookies enabled flag", safe(() => yesNo(navigator.cookieEnabled)));
+    add("Page visibility", safe(() => document.visibilityState));
+    add("Page focused", safe(() => yesNo(document.hasFocus())));
+    add("Top-level page", safe(() => yesNo(window.top === window.self)));
+    add("Viewport (CSS px)", safe(() => window.innerWidth + " × " + window.innerHeight));
+    add("Screen (CSS px)", safe(() => screen.width + " × " + screen.height));
+    add("Screen color depth", safe(() => screen.colorDepth + " bits"));
+    add("Device pixel ratio", safe(() => window.devicePixelRatio));
+    add("Touch points", safe(() => navigator.maxTouchPoints));
+    add("Hardware concurrency", safe(() => navigator.hardwareConcurrency));
+    add("Device memory hint", safe(() => navigator.deviceMemory === undefined ? "not exposed" : navigator.deviceMemory + " GB"));
+    add("WebUSB exposed", safe(() => yesNo("usb" in navigator)));
+    add("WebHID exposed", safe(() => yesNo("hid" in navigator)));
+    add("Web Serial exposed", safe(() => yesNo("serial" in navigator)));
+    add("Web Bluetooth exposed", safe(() => yesNo("bluetooth" in navigator)));
+    add("Gamepad API exposed", safe(() => yesNo(typeof navigator.getGamepads === "function")));
+    add("WebSocket exposed", safe(() => yesNo(typeof window.WebSocket === "function")));
+    add("BroadcastChannel exposed", safe(() => yesNo(typeof window.BroadcastChannel === "function")));
+    add("SharedWorker exposed", safe(() => yesNo(typeof window.SharedWorker === "function")));
+    add("Service worker exposed", safe(() => yesNo("serviceWorker" in navigator)));
+    add("Local storage", safe(() => {
+      const key = "__joygpt_storage_probe__";
+      window.localStorage.setItem(key, "ok");
+      const result = window.localStorage.getItem(key) === "ok" ? "read/write works" : "write/read mismatch";
+      window.localStorage.removeItem(key);
+      return result;
+    }));
+    add("window.nx type", safe(() => typeof window.nx));
+    add("window.nx.endApplet type", safe(() => window.nx == null ? "parent nx missing" : typeof window.nx.endApplet));
+    add("navigator.getGamepads()", safe(() => {
+      if (typeof navigator.getGamepads !== "function") return "API unavailable";
+      const pads = Array.from(navigator.getGamepads()).filter(Boolean);
+      return pads.length ? pads.map(p => "#" + p.index + " " + (p.id || "unnamed") + " (" + p.buttons.length + " buttons, " + p.axes.length + " axes)").join("; ") : "no gamepads visible to page";
+    }));
+    add("Nintendo-like global names", safe(() => {
+      const names = Object.keys(window).filter(name => /nintendo|switch|applet|joycon|joy-con|\bnx\b/i.test(name));
+      return names.length ? names.slice(0, 40).join(", ") : "none found in enumerable window properties";
+    }));
+    add("Controller/HID-like globals", safe(() => {
+      const names = Object.keys(window).filter(name => /gamepad|webhid|hiddevice|usbdevice|bluetoothhid/i.test(name));
+      return names.length ? names.slice(0, 40).join(", ") : "none found in enumerable window properties";
+    }));
+
+    output.textContent = rows.join("\n") + "\n\nNotes:\n- 'not exposed' does not prove the console lacks that capability; it may be hidden from webpages.\n- Global-name searches only inspect enumerable page globals.\n- No hardware permission prompts or device-control calls were made.";
+    status.textContent = "Finished " + rows.length + " read-only checks. Copy the output and send it back here.";
+  }
+
+  $("runSwitchTests").addEventListener("click", runSwitchTests);
+  $("copySwitchTests").addEventListener("click", () => {
+    const textToCopy = $("switchTestsOutput").textContent;
+    if (!textToCopy || textToCopy.startsWith("Run the tests")) {
+      $("switchTestsStatus").textContent = "Run the tests first.";
+      return;
+    }
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(textToCopy).then(
+        () => { $("switchTestsStatus").textContent = "Results copied. Paste them into the chat."; },
+        () => { $("switchTestsStatus").textContent = "Copy was blocked. Select and copy the results manually."; }
+      );
+    } else {
+      $("switchTestsStatus").textContent = "Clipboard API unavailable. Select and copy the results manually.";
+    }
+  });
+
   // Read-only probe: inspect the possible applet API without invoking it.
   function checkSwitchApi() {
     const status = $("switchApiStatus");
