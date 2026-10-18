@@ -370,8 +370,8 @@
     try {
       const health = await fetch(config.endpoint + "/api/health", { cache: "no-store" });
       const data = await health.json();
-      if (!health.ok || !data.ok || data.version !== "ws-lab-1" || !data.websocketSupported) {
-        status.textContent = "The deployed Worker needs the WebSocket-lab update. Update/redeploy worker.js in Cloudflare, then retry. Health response: " + JSON.stringify(data);
+      if (!health.ok || !data.ok || data.version !== "ws-lab-2" || !data.websocketSupported) {
+        status.textContent = "The deployed Worker needs protocol v2. Deploy the latest worker.js in Cloudflare, then retry. Health response: " + JSON.stringify(data);
         return;
       }
     } catch (error) {
