@@ -95,6 +95,76 @@
     $("monitorStatus").textContent = "Monitor stopped.";
   }
 
+
+  // Signal test: requires the separate Worker backend deployed from worker.js.
+  const endpointInput = $("signalEndpoint");
+  const sessionInput = $("signalSession");
+  const signalStatus = $("signalStatus");
+  const signalOutput = $("signalOutput");
+
+  function getSignalConfig() {
+    const endpoint = endpointInput.value.trim().replace(/\/$/, "");
+    const session = sessionInput.value.trim();
+    if (!endpoint) throw new Error("Enter the deployed Worker URL first.");
+    let parsed;
+    try { parsed = new URL(endpoint); } catch (_) { throw new Error("Backend URL is not valid."); }
+    if (parsed.protocol !== "https:") throw new Error("Use an HTTPS Worker URL.");
+    if (!session) throw new Error("Enter the same session code on both devices.");
+    return { endpoint, session };
+  }
+
+  async function sendSignal() {
+    let config;
+    try { config = getSignalConfig(); } catch (error) {
+      signalStatus.textContent = error.message;
+      return;
+    }
+    const id = "PING-" + Date.now().toString(36).toUpperCase();
+    signalStatus.textContent = "Sending " + id + "…";
+    try {
+      const response = await fetch(config.endpoint + "/api/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: config.session, id, from: "browser", text: "PING" })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || ("HTTP " + response.status));
+      signalStatus.textContent = "Backend acknowledged " + id + ". Now check messages on the phone.";
+      signalOutput.textContent = JSON.stringify(data, null, 2);
+    } catch (error) {
+      signalStatus.textContent = "Send failed: " + error.message + ". Check the Worker URL, deployment, and browser network access.";
+    }
+  }
+
+  async function checkSignals() {
+    let config;
+    try { config = getSignalConfig(); } catch (error) {
+      signalStatus.textContent = error.message;
+      return;
+    }
+    signalStatus.textContent = "Checking backend for this session…";
+    try {
+      const response = await fetch(config.endpoint + "/api/messages?session=" + encodeURIComponent(config.session), {
+        method: "GET",
+        cache: "no-store"
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || ("HTTP " + response.status));
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      signalStatus.textContent = messages.length
+        ? "Backend returned " + messages.length + " message(s)."
+        : "Backend responded, but no messages exist for this session yet.";
+      signalOutput.textContent = messages.length
+        ? messages.map(m => "[" + new Date(m.at).toLocaleTimeString() + "] " + m.id + " from " + m.from + ": " + m.text).join("\n")
+        : JSON.stringify(data, null, 2);
+    } catch (error) {
+      signalStatus.textContent = "Check failed: " + error.message + ". Check the Worker URL, deployment, and browser network access.";
+    }
+  }
+
+  $("sendSignal").addEventListener("click", sendSignal);
+  $("checkSignals").addEventListener("click", checkSignals);
+
   $("rescan").addEventListener("click", showApiChecks);
   $("startMonitor").addEventListener("click", startMonitor);
   $("stopMonitor").addEventListener("click", stopMonitor);
