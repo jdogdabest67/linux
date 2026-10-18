@@ -54,9 +54,41 @@ main{max-width:850px;margin:auto;padding:18px 0 40px}h1{font-size:1.65rem;margin
 <div class="term" style="margin-top:12px"><pre id="wasmOutput">Waiting for compiled module…</pre></div>
 <p class="muted">Important: this is a real C-to-WebAssembly test, but the packet is JoyGPT's own invented demo format, not Nintendo's protocol. The buttons are simulated. This test does not access USB/Bluetooth or send any input to the Switch. Source: <a href="./joygpt-codec.c">C code</a> · <a href="./joygpt-codec.js">WebAssembly loader</a>.</p>
 </section>
-<section class="panel"><h2>9. What the result means</h2><div class="status"><span class="good">Detected:</span> only means the browser reports an API or a device in its chooser.</div><div class="status"><span class="warn">Not detected:</span> does not mean the Joy-Con is broken. It may be connected only to the Switch, or Android may not expose it to this browser.</div><div class="status">Even if the phone sees a Joy-Con, this page cannot automatically make the same Joy-Con send inputs to both the phone and Switch. We need an actual supported connection/bridge for that, and this test does not bypass Nintendo's controller pairing.</div></section>
+<section class="panel">
+<h2>9. PhantomHand serial packet lab</h2>
+<p>This reproduces the command framing found in PhantomHand's source code. It lets us encode and decode the same four-byte logical frame before any hardware connection exists. <strong>No USB/Bluetooth access and no commands are sent.</strong></p>
+<p class="muted">The frame is ASCII <code>S</code> (start), a two-byte payload (command ID + value), then ASCII <code>E</code> (end). PhantomHand's browser sends those as three USB transfers to an FT232 serial adapter.</p>
+<label for="phCommandId">Command ID</label>
+<select id="phCommandId" style="width:100%;margin:6px 0 12px;padding:12px;background:#10151c;color:var(--text);border:1px solid var(--line);border-radius:10px">
+<option value="0">0 · B</option><option value="1" selected>1 · A</option><option value="2">2 · Y</option><option value="3">3 · X</option>
+<option value="4">4 · L</option><option value="5">5 · R</option><option value="6">6 · ZL</option><option value="7">7 · ZR</option>
+<option value="8">8 · Minus</option><option value="9">9 · Plus</option><option value="10">10 · Left-stick click</option><option value="11">11 · Right-stick click</option>
+<option value="12">12 · D-pad up</option><option value="13">13 · D-pad down</option><option value="14">14 · D-pad left</option><option value="15">15 · D-pad right</option>
+<option value="16">16 · Home</option><option value="17">17 · Capture</option><option value="18">18 · Left stick X</option><option value="19">19 · Left stick Y</option><option value="20">20 · Right stick X</option><option value="21">21 · Right stick Y</option>
+</select>
+<label for="phCommandValue">Value (0–255)</label>
+<input id="phCommandValue" type="number" min="0" max="255" step="1" value="1" style="width:100%;margin:6px 0 12px;padding:12px;background:#10151c;color:var(--text);border:1px solid var(--line);border-radius:10px">
+<div class="actions" style="margin-bottom:12px">
+<button type="button" data-ph-preset="1,1">A press</button>
+<button type="button" data-ph-preset="1,0">A release</button>
+<button type="button" data-ph-preset="18,128">Left stick center</button>
+<button type="button" data-ph-preset="18,69">Test value 69</button>
+<button type="button" data-ph-preset="18,83">Test value 83</button>
+</div>
+<div class="term"><pre id="phPacketOutput">Creating frame…</pre></div>
+<p class="muted">Known source-code concern: the Arduino parser treats every ASCII S and E byte as a delimiter, even if one appears inside a payload. The values 69 (0x45, ASCII E) and 83 (0x53, ASCII S) therefore collide with frame markers for stick commands.</p>
+<hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+<h3>Decode a frame</h3>
+<p>Paste four hex bytes separated by spaces, such as <code>53 01 01 45</code>. This decoder validates the framing and explains the command.</p>
+<label for="phDecodeInput">Hex bytes</label>
+<input id="phDecodeInput" value="53 01 01 45" autocomplete="off" spellcheck="false" style="width:100%;margin:6px 0 12px;padding:12px;background:#10151c;color:var(--text);border:1px solid var(--line);border-radius:10px">
+<div class="actions" style="margin-bottom:12px"><button type="button" id="phDecodeExample">Load A-press example</button></div>
+<div class="term"><pre id="phDecodeOutput">Decoding…</pre></div>
+<p class="muted">This lab mirrors the public PhantomHand source's frame format. It's a learning/test tool only, not a Nintendo protocol implementation, not a physical USB serial port, and not a controller connection.</p>
+</section>
+<section class="panel"><h2>10. What the result means</h2><div class="status"><span class="good">Detected:</span> only means the browser reports an API or a device in its chooser.</div><div class="status"><span class="warn">Not detected:</span> does not mean the Joy-Con is broken. It may be connected only to the Switch, or Android may not expose it to this browser.</div><div class="status">Even if the phone sees a Joy-Con, this page cannot automatically make the same Joy-Con send inputs to both the phone and Switch. We need an actual supported connection/bridge for that, and this test does not bypass Nintendo's controller pairing.</div></section>
 <p class="muted">Privacy and safety: chooser actions require your tap. The interface and HID access tests may open a selected device, but they do not send controller commands or read input reports. The HID test only lists report-collection metadata and then closes the device.</p>
-</main><script src="./joygpt-codec.js"></script>
+</main><script src="./joygpt-codec.js"></script><script src="./phantomhand-packet.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 function scan(){const rows=[
