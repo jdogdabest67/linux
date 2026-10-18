@@ -35,7 +35,7 @@ export default {
       return json({
         ok: true,
         service: "joygpt-signal-bridge",
-        version: "ws-lab-1",
+        version: "ws-lab-2",
         websocketSupported: true
       });
     }
@@ -167,14 +167,6 @@ export class SignalStore {
         for (const peer of this.ctx.getWebSockets()) {
           try {
             const attachment = peer.deserializeAttachment() || {};
-            const meta = {
-              type: "packet-relay",
-              header,
-              fromRole: sender.role || "browser",
-              fromClientId: sender.clientId || "unknown-client",
-              toClientId: attachment.clientId || "unknown-client",
-              serverReceivedAt: receivedAt
-            };
             // The binary frame contains its own metadata header, so there is
             // no separate metadata frame to become detached from its payload.
             peer.send(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
@@ -192,6 +184,7 @@ export class SignalStore {
     try {
       if (message.length > 16384) throw new Error("Message is too large.");
       payload = JSON.parse(message);
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("Expected a JSON object.");
     } catch (_) {
       try { ws.send(JSON.stringify({ type: "error", error: "Send a valid JSON message (maximum 16 KiB) or a JoyGPT JGPT binary packet." })); } catch (_) {}
       return;
