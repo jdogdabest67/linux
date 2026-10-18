@@ -781,6 +781,89 @@
     }
   });
 
+
+  // JoyGPT Watch: local camera preview and frame capture.
+  // Frames stay in this browser unless the user manually downloads/shares them.
+  let watchStream = null;
+  let lastCapturedUrl = null;
+
+  function setWatchStatus(message) {
+    const node = $("watchStatus");
+    if (node) node.textContent = message;
+  }
+
+  async function startWatchCamera() {
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+      setWatchStatus("Camera API unavailable here. Open this page in a modern browser over HTTPS.");
+      return;
+    }
+    try {
+      stopWatchCamera(false);
+      setWatchStatus("Requesting camera permission…");
+      watchStream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      const video = $("watchVideo");
+      video.srcObject = watchStream;
+      await video.play();
+      $("watchVideoWrap").hidden = false;
+      $("watchCapture").disabled = false;
+      $("watchStop").disabled = false;
+      setWatchStatus("Camera running. Aim at the TV and tap Capture frame when useful gameplay is visible.");
+    } catch (error) {
+      const detail = error && error.name ? error.name : "CameraError";
+      setWatchStatus("Could not start camera (" + detail + "). Check browser camera permission and try again.");
+    }
+  }
+
+  function stopWatchCamera(updateStatus = true) {
+    if (watchStream) {
+      watchStream.getTracks().forEach(track => track.stop());
+      watchStream = null;
+    }
+    const video = $("watchVideo");
+    if (video) video.srcObject = null;
+    if ($("watchVideoWrap")) $("watchVideoWrap").hidden = true;
+    if ($("watchCapture")) $("watchCapture").disabled = true;
+    if ($("watchStop")) $("watchStop").disabled = true;
+    if (updateStatus) setWatchStatus("Camera stopped. Captured frames remain available until you leave or refresh this page.");
+  }
+
+  function captureWatchFrame() {
+    const video = $("watchVideo");
+    const canvas = $("watchCanvas");
+    if (!video || !canvas || !video.videoWidth || !video.videoHeight) {
+      setWatchStatus("No camera frame yet. Start the camera and wait for the preview.");
+      return;
+    }
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext("2d");
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(blob => {
+      if (!blob) {
+        setWatchStatus("Frame capture failed. Try again.");
+        return;
+      }
+      if (lastCapturedUrl) URL.revokeObjectURL(lastCapturedUrl);
+      lastCapturedUrl = URL.createObjectURL(blob);
+      const image = $("watchCapturedImage");
+      image.src = lastCapturedUrl;
+      image.hidden = false;
+      $("watchDownload").href = lastCapturedUrl;
+      $("watchDownload").download = "joygpt-frame-" + new Date().toISOString().replace(/[:.]/g, "-") + ".jpg";
+      $("watchDownload").hidden = false;
+      $("watchFrameMeta").textContent = "Captured " + canvas.width + " × " + canvas.height + " pixels. This frame is stored locally in this page; it has not been sent to an AI.";
+      setWatchStatus("Frame captured! Use Download frame to save it, then attach it in ChatGPT for gameplay hints.");
+    }, "image/jpeg", 0.88);
+  }
+
+  if ($("watchStart")) $("watchStart").addEventListener("click", startWatchCamera);
+  if ($("watchStop")) $("watchStop").addEventListener("click", () => stopWatchCamera());
+  if ($("watchCapture")) $("watchCapture").addEventListener("click", captureWatchFrame);
+  window.addEventListener("pagehide", () => stopWatchCamera(false));
+
   loadSavedConfig();
   showApiChecks();
 })();
