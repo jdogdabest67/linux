@@ -1,323 +1,38 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#10151c">
-<meta name="description" content="A focused JoyGPT experiment for finding a real path from ChatGPT to Nintendo Switch controls.">
-<title>JoyGPT · Controller Link Lab</title>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#10151c"><meta name="description" content="JoyGPT real-time messaging and Live Feed v0.1">
+<title>JoyGPT · Messaging Lab</title>
 <style>
 :root{color-scheme:dark;--bg:#10151c;--panel:#18212b;--line:#2b3947;--text:#e8f0f7;--muted:#a9bac9;--green:#8bf0b0;--amber:#ffd27a;--blue:#91c8ff}
-*{box-sizing:border-box}
-body{margin:0;background:radial-gradient(ellipse at top,#192939 0,#10151c 48%);color:var(--text);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
-main{max-width:760px;margin:auto;padding:26px 0 44px}
-h1{font-size:clamp(1.8rem,6vw,2.6rem);line-height:1.08;letter-spacing:-.035em;margin:.45rem 0 .7rem}
-h2{font-size:1.15rem;line-height:1.25;margin:0 0 .7rem}
-h3{font-size:1rem;margin:0 0 .35rem}
-p{margin:.5rem 0 0}
-a{color:var(--blue);text-underline-offset:3px}
-.sub,.muted{color:var(--muted)}
-.sub{max-width:640px}
-.eyebrow{display:inline-block;color:var(--green);font-size:.78rem;font-weight:750;letter-spacing:.09em}
-.panel{background:rgba(24,33,43,.94);border:1px solid var(--line);border-radius:16px;padding:17px;margin:14px 0}
-.lead{font-size:1.02rem}
-.note{border-left:3px solid var(--amber);padding:4px 0 4px 12px;color:var(--muted)}
-.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:3px 9px;font-size:.8rem;color:var(--muted)}
-.grid{display:grid;grid-template-columns:1fr;gap:8px}
-@media(min-width:560px){.grid{grid-template-columns:1fr 1fr}}
-.status{display:flex;align-items:flex-start;gap:10px;border-top:1px solid var(--line);padding:10px 0}
-.status:first-child{border-top:0}
-.dot{width:9px;height:9px;flex:0 0 9px;border-radius:50%;margin-top:.45rem;background:var(--muted)}
-.dot.good{background:var(--green)}.dot.warn{background:var(--amber)}
-.status-title{font-weight:700}.small{font-size:.9rem;color:var(--muted)}
-button{background:#263848;color:var(--text);border:1px solid #40566b;border-radius:11px;padding:11px 14px;font:inherit;font-weight:650;cursor:pointer}
-button:active{transform:scale(.985)}
-button.primary{background:#28553e;border-color:#578967}
-button:focus-visible,a:focus-visible{outline:2px solid var(--green);outline-offset:3px}
-.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.terminal{background:#070b10;border:1px solid #34424f;border-radius:12px;padding:12px;margin-top:12px}
-pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;font:13px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace}
-hr{border:0;border-top:1px solid var(--line);margin:16px 0}
-footer{font-size:.82rem;color:var(--muted);padding:10px 2px}
-</style>
-</head>
-<body>
-<main>
-<section class="panel"><h2>JoyGPT Watch</h2><p class="small">Preview your TV through the phone camera and capture gameplay frames.</p><p><a href="./watch.html">Open JoyGPT Watch camera preview ↗</a></p></section>
-<header>
-  <span class="eyebrow">JOYGPT · REAL-HARDWARE RESEARCH</span>
-  <h1>🎮 Controller Link Lab</h1>
-  <p class="sub lead">The mission: let ChatGPT help play a real Switch game, starting with Cappy in Super Mario Odyssey. This page now contains only tests that can tell us something useful with the gear currently available.</p>
-</header>
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#192939 0,#10151c 52%);color:var(--text);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;padding:env(safe-area-inset-top) 12px env(safe-area-inset-bottom)}
+main{max-width:820px;margin:auto;padding:18px 0 42px}h1{font-size:clamp(1.8rem,6vw,2.5rem);line-height:1.08;letter-spacing:-.035em;margin:.4rem 0 .55rem}h2{font-size:1.12rem;margin:0 0 .6rem}h3{font-size:1rem;margin:14px 0 6px}p{margin:.5rem 0 0}a{color:var(--blue);text-underline-offset:3px}
+.small,small{font-size:.9rem;color:var(--muted)}.eyebrow{color:var(--green);font-size:.78rem;font-weight:800;letter-spacing:.1em}
+.panel{background:rgba(24,33,43,.96);border:1px solid var(--line);border-radius:16px;padding:15px;margin:12px 0}.grid{display:grid;grid-template-columns:1fr;gap:9px}@media(min-width:580px){.grid{grid-template-columns:1fr 1fr}}
+label{display:block;font-size:.9rem;color:var(--muted);margin-top:9px}input,select,textarea{display:block;width:100%;margin:5px 0 8px;padding:11px;border-radius:10px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit;min-width:0}textarea{resize:vertical}
+button{background:#263848;color:var(--text);border:1px solid #40566b;border-radius:11px;padding:10px 13px;font:inherit;font-weight:650;cursor:pointer}button:active{transform:scale(.985)}button.primary{background:#28553e;border-color:#578967}button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.terminal{background:#070b10;border:1px solid #34424f;border-radius:12px;padding:10px;margin-top:10px}pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
+.statusline{padding:9px 11px;border:1px solid var(--line);border-radius:10px;margin-top:10px;color:var(--muted);overflow-wrap:anywhere}.pill{display:inline-block;padding:2px 8px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:.78rem}.note{border-left:3px solid var(--amber);padding:4px 0 4px 10px;color:var(--muted)}
+.chat{display:flex;flex-direction:column;gap:9px;min-height:100px;max-height:44vh;overflow-y:auto;padding:2px}.bubble{border:1px solid #344454;background:#101821;border-radius:12px;padding:10px;overflow-wrap:anywhere}.bubble.own{border-color:#456b55;background:#13231b}.bubble-head{display:flex;gap:8px;align-items:center;justify-content:space-between;color:var(--muted);font-size:.78rem;margin-bottom:5px}.bubble-body{white-space:pre-wrap;overflow-wrap:anywhere}.empty{padding:20px 10px;text-align:center;color:var(--muted)}.file-card{border:1px solid #40566b;border-radius:10px;padding:10px;margin-top:8px;overflow-wrap:anywhere}
+video,img{max-width:100%;background:#070b10;border-radius:9px}.feed-image{display:block;width:100%;max-height:360px;object-fit:contain;min-height:140px;border:1px solid var(--line)}.feed-preview{display:block;width:100%;max-height:200px;object-fit:contain}footer{font-size:.8rem;color:var(--muted);padding:12px 2px}
+</style></head><body><main>
+<header><span class="eyebrow">JOYGPT · MESSAGING LAB</span><h1>💬 The message pipe</h1><p class="small">A focused phone ↔ Switch browser messaging test. Send text, structured data, files, or low-rate camera snapshots. Messages are relayed between connected browser pages; this does not control a game or import saves.</p></header>
 
-<section class="panel">
-  <h2>Current reality check</h2>
-  <p><strong>We have not connected ChatGPT to the Switch.</strong> A web page can read input from a controller that the phone exposes to it, but that does not make the phone a Switch-compatible controller or forward commands into the console.</p>
-  <p class="note">The previous USB initialization test, pretend C encoder, and PhantomHand packet simulator have been removed from the page. They did not create a working control path, and probing the Pro Controller could interrupt its connection.</p>
-</section>
+<section class="panel"><h2>1. Connect both devices</h2><div class="grid"><div><label for="signalEndpoint">Worker URL</label><input id="signalEndpoint" type="url" inputmode="url" value="https://joygpt-signal-bridge.jdogdabest67.workers.dev" autocomplete="url"></div><div><label for="signalSession">Shared session code</label><input id="signalSession" type="text" value="FRIES-001" maxlength="64" autocomplete="off"></div></div>
+<label for="deviceRole">This device</label><select id="deviceRole"><option value="phone">Phone</option><option value="switch">Switch 2 browser</option><option value="browser">Other browser</option></select>
+<div class="actions"><button type="button" id="connectWebSocket" class="primary">Connect</button><button type="button" id="disconnectWebSocket">Disconnect</button><button type="button" id="clearChat">Clear local chat</button></div>
+<div id="connectionStatus" class="statusline" aria-live="polite">Not connected. Use the same Worker URL and session on both devices, then connect both.</div><p class="note">The session code is a room name, not strong authentication. Use test data only, not private messages.</p></section>
 
-<section class="panel">
-  <h2>1. Check what this browser exposes</h2>
-  <p class="small">These are capability checks, not proof that a specific controller can be connected. Some APIs exist only on certain browsers and secure pages.</p>
-  <div id="apiChecks" class="terminal" aria-live="polite"><pre>Checking browser capabilities…</pre></div>
-  <div class="actions"><button type="button" id="rescan" class="primary">Scan again</button></div>
-</section>
+<section class="panel"><h2>2. Messages</h2><div class="grid"><div><label for="messageKind">Message format</label><select id="messageKind"><option value="text">Plain text</option><option value="markdown">Markdown text (safe plain-text display)</option><option value="json">Structured JSON</option><option value="event">Event / data object</option><option value="meta">Metadata object</option><option value="reaction">Reaction / emoji</option><option value="status">Status update</option></select></div><div><label for="messageTarget">Delivery</label><select id="messageTarget"><option value="room">Room relay (all connected browsers)</option></select></div></div>
+<label for="messageComposer">Message body</label><textarea id="messageComposer" rows="4" maxlength="12000" placeholder="Write a message, JSON object, event, or status update…">Hello from JoyGPT!</textarea>
+<div class="actions"><button type="button" id="sendMessage" class="primary">Send message</button><button type="button" id="quickPing">Send ping</button></div><div id="messageStatus" class="small" aria-live="polite" style="margin-top:8px">Messages send when you press Send.</div>
+<div class="terminal"><div id="chatMessages" class="chat" aria-live="polite"><div class="empty">Chat is empty. Connect both devices and send the first message.</div></div></div></section>
 
-<section class="panel">
-  <h2>2. Can the phone read a controller?</h2>
-  <p class="small">Start the monitor, then press a button on a controller that is connected to the phone. If Android/Chrome exposes it through the Gamepad API, its buttons and axes should appear below.</p>
-  <p class="note">This is only an input test. Pairing a Joy-Con or plugging in the Pro Controller for this test may take it away from the Switch, so do not expect the same controller to operate both at once.</p>
-  <div class="actions">
-    <button type="button" id="startMonitor" class="primary">Start input monitor</button>
-    <button type="button" id="stopMonitor">Stop</button>
-  </div>
-  <div id="monitorStatus" class="small" aria-live="polite" style="margin-top:10px">Monitor stopped.</div>
-  <div class="terminal"><pre id="gamepadOutput">No controller data read yet.</pre></div>
-</section>
+<section class="panel"><h2>3. File and media messages</h2><p class="small">Send any file up to 10 MB, including .bin files, images, audio, video, documents, and archives. Common media can be previewed; other files can be downloaded.</p><input id="fileInput" type="file"><div class="actions"><button type="button" id="sendFile">Send selected file</button></div><div id="fileStatus" class="statusline" aria-live="polite">No transfer started.</div><div id="receivedFiles"></div></section>
 
+<section class="panel"><h2>4. Live Feed v0.1 <span class="pill">snapshot stream</span></h2><p class="small">A first live-feed prototype: the camera is captured as a small JPEG snapshot roughly once per second and sent over the messaging socket. It is not continuous video or audio. The feed starts only when you press Start and grant camera permission.</p>
+<div class="grid"><div><h3>Local camera</h3><video id="localFeedVideo" class="feed-preview" autoplay muted playsinline hidden></video><div id="localFeedPlaceholder" class="empty">Camera is off.</div><div id="localFeedStatus" class="small" style="margin-top:6px">Not sending.</div></div><div><h3>Remote feed</h3><img id="remoteFeedImage" class="feed-image" alt="Latest frame received from the other device" hidden><div id="remoteFeedPlaceholder" class="empty">Waiting for a frame from the other device.</div><div id="remoteFeedStatus" class="small" style="margin-top:6px">No remote frames received.</div></div></div>
+<div class="actions"><button type="button" id="startLiveFeed" class="primary">Start Live Feed</button><button type="button" id="stopLiveFeed" disabled>Stop feed</button><button type="button" id="sendOneFrame">Send one frame</button></div><div id="feedStatus" class="statusline" aria-live="polite">Live Feed v0.1 is stopped.</div><p class="note">Camera frames leave this device only while the test is running. Stop the feed to turn the camera off. No audio is sent. Large frames may be skipped. This is a camera view, not direct console screen capture.</p></section>
 
-<section class="panel">
-  <h2>3. Send a real browser-to-backend signal</h2>
-  <p class="small">This panel needs a deployed JoyGPT Worker URL first. Use the same Worker URL and session code on the Switch browser and phone.</p>
-  <label for="signalEndpoint">Backend URL</label>
-  <input id="signalEndpoint" type="url" inputmode="url" value="https://joygpt-signal-bridge.jdogdabest67.workers.dev" placeholder="https://your-worker.your-subdomain.workers.dev" autocomplete="url" style="display:block;width:100%;margin:6px 0 12px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
-  <label for="signalSession">Shared session code</label>
-  <input id="signalSession" type="text" value="FRIES-001" maxlength="64" autocomplete="off" style="display:block;width:100%;margin:6px 0 12px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
-  <div class="actions">
-    <button type="button" id="sendSignal" class="primary">Send PING from this browser</button>
-    <button type="button" id="checkSignals">Check received messages</button>
-  </div>
-  <div id="signalStatus" class="small" aria-live="polite" style="margin-top:10px">Backend not configured. Deploy the Worker described in the repository README first.</div>
-  <div class="terminal"><pre id="signalOutput">No signal checked yet.</pre></div>
-  <p class="note">A message appearing on the phone proves the Switch browser sent a request that the backend stored. It does not prove the Switch operating system received a command. Do not enter private information here.</p>
-</section>
-
-
-<section class="panel">
-  <h2>4. Remote webpage commands (new experiment)</h2>
-  <p class="small">Set this page to <strong>Phone</strong> on your phone and <strong>Switch</strong> on the Switch 2. Start listening on the Switch page. Then send a command from the phone. Both pages must use the same Worker URL and session.</p>
-  <label for="deviceRole">This device is</label>
-  <select id="deviceRole" style="display:block;width:100%;margin:6px 0 12px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
-    <option value="phone">Phone (send commands)</option>
-    <option value="switch">Switch 2 (receive commands)</option>
-  </select>
-  <label for="commandText">Command</label>
-  <input id="commandText" type="text" value="SAY:HELLO SWITCH!" maxlength="120" autocomplete="off" style="display:block;width:100%;margin:6px 0 12px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
-  <div class="actions">
-    <button type="button" id="sendCommand" class="primary">Send command</button>
-    <button type="button" id="listenCommands">Start listening</button>
-    <button type="button" id="stopCommands">Stop listening</button>
-  </div>
-  <div class="actions">
-    <button type="button" data-command="SAY:HELLO SWITCH!">Say hello</button>
-    <button type="button" data-command="FLASH">Flash screen</button>
-    <button type="button" data-command="PRESS:A">Press demo A</button>
-    <button type="button" data-command="PRESS:UP">Press demo UP</button>
-  </div>
-  <div id="commandStatus" class="small" aria-live="polite" style="margin-top:10px">Command listener stopped.</div>
-  <div class="terminal" aria-live="polite"><pre id="commandOutput">No remote command received yet.</pre></div>
-  <div id="remoteStage" style="margin-top:12px;padding:18px;border:1px solid #40566b;border-radius:12px;background:#070b10;text-align:center">
-    <div class="small">REMOTE ACTION DISPLAY</div>
-    <div id="remoteBig" style="font-size:clamp(1.5rem,7vw,2.4rem);font-weight:800;overflow-wrap:anywhere;margin-top:8px">READY</div>
-    <div id="remoteButtonState" class="small" style="margin-top:8px">Demo button: idle</div>
-    <div style="margin-top:12px"><button type="button" id="demoTarget">Local demo button (0)</button></div>
-  </div>
-  <p class="note">These commands can change this webpage's display and trigger local demo actions only. PRESS:A does not press a Switch controller button or control a game. This experiment tests whether one browser can command the other browser in real time.</p>
-</section>
-
-<section class="panel">
-  <h2>5. Check for a Switch browser applet API</h2>
-  <p class="small">This is a read-only capability check. It inspects whether the page can see <code>window.nx</code> and whether <code>window.nx.endApplet</code> is a function. It does not call the function or close the browser.</p>
-  <div class="actions">
-    <button type="button" id="checkSwitchApi" class="primary">Check Switch API</button>
-  </div>
-  <div id="switchApiStatus" class="small" aria-live="polite" style="margin-top:10px">Not checked yet.</div>
-  <div class="terminal"><pre id="switchApiOutput">Tap “Check Switch API” to inspect what this page can access.</pre></div>
-  <p class="note">A missing API means this browser page cannot use that method. A present function would only show that the method is exposed, not guarantee it works or that it can launch a game.</p>
-</section>
-
-<section class="panel">
-  <h2>Why the two tempting routes do not solve it</h2>
-  <div class="status">
-    <span class="dot warn"></span>
-    <div><div class="status-title">Super Mario Odyssey + GameShare</div>
-      <p class="small">Great match for Cappy: the second player controls Cappy. But GameShare guests join from a second Switch or Switch 2 system, not a phone browser. It needs a second console.</p>
-      <p><a href="https://en-americas-support.nintendo.com/app/answers/detail/a_id/27785/p/988" target="_blank" rel="noopener noreferrer">Nintendo's official Odyssey multiplayer steps ↗</a></p>
-    </div>
-  </div>
-  <div class="status">
-    <span class="dot warn"></span>
-    <div><div class="status-title">PhantomHand browser controller</div>
-      <p class="small">Its setup guide calls for an Arduino Leonardo plus a separate serial adapter. The guide says phones/tablets are not supported (Android may work but was not tested) and describes desktop Chrome setup. The hardware bridge is the missing part.</p>
-      <p><a href="https://github.com/noov-smash/PhantomHand/blob/main/GettingStartedGuide.md" target="_blank" rel="noopener noreferrer">PhantomHand setup guide ↗</a> · <a href="https://github.com/noov-smash/PhantomHand" target="_blank" rel="noopener noreferrer">Source code ↗</a></p>
-    </div>
-  </div>
-  <div class="status">
-    <span class="dot warn"></span>
-    <div><div class="status-title">Phone USB-C directly to Switch</div>
-      <p class="small">In our test, Android showed file-transfer/tether/MIDI/charging options and the console did not become a controller bridge. A browser page cannot turn that cable into a USB controller emulator by itself.</p>
-    </div>
-  </div>
-</section>
-
-<section class="panel">
-  <h2>What to test now</h2>
-  <p><strong>First:</strong> tap <em>Scan again</em> and note whether WebUSB, WebHID, Web Bluetooth, and Gamepad API say “Exposed” or “Not exposed.”</p>
-  <p><strong>Then, only if useful:</strong> start the input monitor with a controller connected to the phone and tell me whether any buttons/axes change. If no controller is attached to the phone, “No controller detected” is an expected result, not a failure.</p>
-  <p class="small">These checks can rule out browser-side options. They will not make the Switch respond. With current hardware, the missing ingredient is a real control path between the browser/ChatGPT and the console.</p>
-</section>
-
-
-<section class="panel">
-  <h2>6. Switch browser environment tests</h2>
-  <p class="small">A bundle of read-only checks for clues about the SwitchBru browser: browser identity, display, storage, controller visibility, and exposed Nintendo- or applet-named globals. These checks do not request permissions, send device commands, or try to launch/close anything.</p>
-  <div class="actions">
-    <button type="button" id="runSwitchTests" class="primary">Run Switch tests</button>
-    <button type="button" id="copySwitchTests">Copy results</button>
-  </div>
-  <div id="switchTestsStatus" class="small" aria-live="polite" style="margin-top:10px">Tests not run yet.</div>
-  <div class="terminal"><pre id="switchTestsOutput">Run the tests to collect browser-environment clues.</pre></div>
-  <p class="note">These results describe what this webpage can see, not hidden console internals. An API being present does not mean it can control the Switch or launch a game.</p>
-</section>
-
-<section class="panel">
-  <h2>7. Live WebSocket link test</h2>
-  <p class="small">This opens a real, persistent connection through the JoyGPT Worker. Connect the phone and Switch pages with the same session and their correct roles, then send a marker from either one. Each sender should see a server echo with round-trip time; the other connected page should show a peer relay.</p>
-  <p class="note">This tests a live message pipe only. The Worker must be updated and redeployed in Cloudflare too. Updating GitHub Pages alone does not update the backend.</p>
-  <label for="wsTestMessage">Legacy latency-test marker</label>
-  <input id="wsTestMessage" type="text" value="HELLO FROM JOYGPT" maxlength="200" autocomplete="off" style="display:block;width:100%;margin:6px 0 12px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
-  <div class="actions">
-    <button type="button" id="connectWebSocketTest" class="primary">Connect WebSocket</button>
-    <button type="button" id="sendWebSocketTest">Send test marker</button>
-    <button type="button" id="runWebSocketBurst">Run 10-marker latency test</button>
-    <button type="button" id="disconnectWebSocketTest">Disconnect</button>
-  </div>
-  <h3 style="margin:18px 0 6px">Send a typed message</h3>
-  <label for="wsTypedKind">Message type</label>
-  <select id="wsTypedKind" style="display:block;width:100%;margin:6px 0 10px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
-    <option value="text">Plain text</option>
-    <option value="json">Structured JSON</option>
-    <option value="event">Event / data object</option>
-    <option value="meta">Metadata object</option>
-  </select>
-  <label for="wsTypedPayload">Message content</label>
-  <textarea id="wsTypedPayload" rows="3" style="display:block;width:100%;margin:6px 0 10px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">{"message":"hello from JoyGPT","source":"phone"}</textarea>
-  <button type="button" id="sendTypedWebSocketMessage">Send typed message</button>
-  <h3 style="margin:18px 0 6px">Send a file</h3>
-  <p class="small">Choose any file up to 10 MB, including documents, save files, archives, or media. Files are split into small binary packets and relayed through the Worker. This transfers bytes only; it does not make the Switch accept or load a save file.</p>
-  <input id="wsFileInput" type="file" style="display:block;width:100%;margin:8px 0;color:var(--text)">
-  <button type="button" id="sendWebSocketFile">Send selected file</button>
-  <div id="wsFileStatus" class="small" aria-live="polite" style="margin-top:8px">No file transfer yet.</div>
-  <h3 style="margin:18px 0 6px">Received files</h3>
-  <div id="wsReceivedFiles" class="small">Received files will appear here with a preview when supported, or a download link.</div>
-  <div id="wsTestStatus" class="small" aria-live="polite" style="margin-top:10px">Not connected.</div>
-  <div id="wsCount" class="small">Messages observed: 0</div>
-  <div id="wsRttSummary" class="small">No echo samples yet.</div>
-  <div class="terminal"><pre id="wsTestOutput">Connect both pages with the same session. Test text first, then structured JSON and a small file.</pre></div>
-</section>
-
-<section class="panel">
-  <h2>8. What input events reach the webpage?</h2>
-  <p class="small">Start recording, then use the Switch controller to move page focus and press A, B, and the D-pad. The log now includes event type, key/code, trust flag, modifiers, and repeat state. Text-entry fields are skipped so typed text is not recorded.</p>
-  <label style="display:flex;align-items:center;gap:10px;margin-top:12px">
-    <input type="checkbox" id="streamInputEvents">
-    <span>Relay event summaries to the connected peer over WebSocket</span>
-  </label>
-  <p class="small">For remote collection, connect WebSocket on both devices, use role Switch on the console and Phone on your phone, then check this box on the Switch page before recording. The phone's WebSocket log should show each relayed event.</p>
-  <div class="actions">
-    <button type="button" id="startEventProbe" class="primary">Start input-event recorder</button>
-    <button type="button" id="stopEventProbe">Stop recorder</button>
-    <button type="button" id="copyInputEvents">Copy input log</button>
-    <button type="button" id="syntheticEventProbe">Test synthetic-event boundary</button>
-  </div>
-  <div id="inputEventStatus" class="small" aria-live="polite" style="margin-top:10px">Recorder stopped.</div>
-  <div id="syntheticEventStatus" class="small">Synthetic-event test not run.</div>
-  <div id="inputEventCount" class="small">Events captured: 0</div>
-  <div id="inputEventSummary" class="small">No input patterns yet.</div>
-  <div class="terminal"><pre id="inputEventOutput">No webpage events recorded yet.</pre></div>
-  <p class="note">The synthetic-event test dispatches a fake keydown only inside this webpage. It tests browser event trust, not gameplay. If physical controller presses appear as trusted click/key events, we can map them, but those events still belong to this page.</p>
-</section>
-
-<section class="panel">
-  <h2>9. Research: possible paths into a real game</h2>
-  <p class="small">The browser tests have answered the easy part: the page can receive some controller-related events and the phone can send messages to the page. The missing step is converting a remote command into a controller input that the running game accepts.</p>
-  <div class="status">
-    <span class="dot warn"></span>
-    <div><div class="status-title">Browser-only JavaScript</div>
-      <p class="small">Not a complete route. Synthetic keyboard/click events are events inside the webpage, not hardware controller reports. The Switch page also reported WebUSB, WebHID, and Web Bluetooth unavailable, with no visible Gamepad device or Nintendo applet API.</p>
-    </div>
-  </div>
-  <div class="status">
-    <span class="dot warn"></span>
-    <div><div class="status-title">External USB controller bridge (strongest documented route)</div>
-      <p class="small">Phone/browser → Worker/WebSocket → a separate microcontroller or controller-bridge device → USB controller input to the console. PhantomHand documents an ATmega32U4 Arduino Leonardo plus a serial adapter and NintendoSwitchControlLibrary. This is documented for Switch automation; Switch 2 compatibility with that exact library/hardware is not confirmed, so it needs a safe compatibility test before we rely on it.</p>
-      <p><a href="https://github.com/noov-smash/PhantomHand" target="_blank" rel="noopener noreferrer">PhantomHand architecture ↗</a> · <a href="https://github.com/lefmarna/NintendoSwitchControlLibrary" target="_blank" rel="noopener noreferrer">Controller library ↗</a></p>
-    </div>
-  </div>
-  <div class="status">
-    <span class="dot warn"></span>
-    <div><div class="status-title">Phone as a Bluetooth HID device</div>
-      <p class="small">Android has a native BluetoothHidDevice API, but it requires a native app and Bluetooth permissions; a normal browser page cannot register the phone as a Bluetooth HID controller. It is not viable under the current browser-only/managed-phone constraints, and Nintendo-controller compatibility is unverified.</p>
-      <p><a href="https://developer.android.com/reference/android/bluetooth/BluetoothHidDevice" target="_blank" rel="noopener noreferrer">Android Bluetooth HID API docs ↗</a></p>
-    </div>
-  </div>
-  <div class="status">
-    <span class="dot warn"></span>
-    <div><div class="status-title">Linux Bluetooth controller emulation</div>
-      <p class="small">A Linux computer with a compatible Bluetooth adapter may be able to emulate a Switch controller using projects such as joycontrol, but Switch 2 support is uncertain. The old desktop's condition and Bluetooth hardware would need checking first.</p>
-      <p><a href="https://github.com/mart1nro/joycontrol" target="_blank" rel="noopener noreferrer">joycontrol project ↗</a></p>
-    </div>
-  </div>
-  <p class="note">Current blocker: none of our listed devices is known to act as a Switch-compatible controller controlled by our webpage. We can continue network and event mapping now, but real gameplay needs that final controller-emulation route.</p>
-</section>
-
-
-<section class="panel" id="fileResearchPanel">
-  <h2>10. Binary file inspector</h2>
-  <p class="small">Choose a downloaded file to inspect it locally. This checks size, SHA-256, the first bytes, common file signatures, binary entropy, and readable strings with their byte offsets. The file is not uploaded by this inspector.</p>
-  <p class="note">A recognizable string or header is a clue, not proof that a file is a valid save. Proprietary game data may need a specific parser. This tool does not decrypt, edit, or import saves.</p>
-  <input id="researchFileInput" type="file" style="display:block;width:100%;margin:8px 0;color:var(--text)">
-  <div class="actions">
-    <button type="button" id="inspectResearchFile" class="primary">Inspect selected file</button>
-    <button type="button" id="copyFileResearch">Copy file report</button>
-    <button type="button" id="downloadFileResearch">Download JSON report</button>
-  </div>
-  <div id="fileResearchStatus" class="small" aria-live="polite" style="margin-top:10px">No file inspected yet.</div>
-  <div class="terminal"><pre id="fileResearchOutput">Choose a file and inspect it. The current limit is 10 MB, matching JoyGPT's transfer test.</pre></div>
-</section>
-
-<section class="panel" id="repoResearchPanel">
-  <h2>11. GitHub repository researcher</h2>
-  <p class="small">Paste a public GitHub repository URL. JoyGPT will read its public metadata and file tree, list .bin files (including kingdom-named files), and scan the README for save/format notes. It will not download every file.</p>
-  <label for="researchRepoUrl">GitHub repository</label>
-  <input id="researchRepoUrl" type="url" inputmode="url" placeholder="https://github.com/owner/repository" style="display:block;width:100%;margin:6px 0 10px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
-  <div class="actions">
-    <button type="button" id="scanResearchRepo" class="primary">Scan repository</button>
-    <button type="button" id="copyRepoResearch">Copy repository report</button>
-  </div>
-  <div id="repoResearchStatus" class="small" aria-live="polite" style="margin-top:10px">No repository scanned yet.</div>
-  <div id="repoBinList" class="small" style="margin-top:10px"></div>
-  <div class="terminal"><pre id="repoResearchOutput">A scan will report the repository's default branch, .bin paths and sizes, and relevant README lines. Public GitHub API rate limits or browser restrictions may block this check.</pre></div>
-</section>
-
-<section class="panel" id="urlResearchPanel">
-  <h2>12. Direct file URL diagnostics</h2>
-  <p class="small">Test what a direct file URL returns from this browser. The request asks for the first byte range where supported and cancels reading after the first response chunk. It records HTTP status, content type, range support, timing, and a short byte preview.</p>
-  <label for="researchUrl">Direct file URL (raw file URL is best)</label>
-  <input id="researchUrl" type="url" inputmode="url" placeholder="https://raw.githubusercontent.com/owner/repo/branch/path/file.bin" style="display:block;width:100%;margin:6px 0 10px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
-  <div class="actions">
-    <button type="button" id="testResearchUrl" class="primary">Test URL response</button>
-    <button type="button" id="copyUrlResearch">Copy URL report</button>
-    <button type="button" id="downloadUrlResearch">Download JSON report</button>
-  </div>
-  <div id="urlResearchStatus" class="small" aria-live="polite" style="margin-top:10px">No URL tested yet.</div>
-  <div class="terminal"><pre id="urlResearchOutput">This test may be blocked by CORS, the network, or the browser. Such a failure is not proof that the file itself is broken.</pre></div>
-  <p class="note">Nintendo error 2809-1209 is not an HTTP status that this page can inspect. Nintendo's published guidance says to try a different internet access point. This tool helps separate a reachable raw URL from browser-navigation/download behavior, but cannot directly inspect the console's error screen.</p>
-  <p><a href="https://en-americas-support.nintendo.com/app/answers/detail/a_id/49828/kw/2809-1209" target="_blank" rel="noopener noreferrer">Nintendo support: error 2809-1209 ↗</a></p>
-</section>
-
-<footer>JoyGPT research page · No device chooser is opened automatically. This page does not send USB/Bluetooth commands to the Switch.</footer>
-</main>
-<script src="./app.js?v=research-lab-1"></script>
-</body>
-</html>
+<section class="panel"><h2>5. Transport diagnostics</h2><p class="small">Connection state, message count, round-trip time, and recent events for debugging delivery.</p><div class="grid"><div class="statusline" id="transportState">Socket: disconnected</div><div class="statusline" id="rttSummary">Round-trip time: no samples yet</div></div><div class="actions"><button type="button" id="runPingBurst">Run 10-message test</button><button type="button" id="copyLog">Copy log</button></div><div id="messageCount" class="small" style="margin-top:8px">Messages observed: 0</div><div class="terminal"><pre id="transportLog">No transport events yet.</pre></div></section>
+<footer>JoyGPT Messaging Lab · Browser-to-browser relay · Live Feed v0.1</footer></main><script src="./app.js?v=messaging-livefeed-01"></script></body></html>
