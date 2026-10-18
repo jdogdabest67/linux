@@ -24,11 +24,11 @@ main{max-width:850px;margin:auto;padding:18px 0 40px}h1{font-size:1.65rem;margin
 <section class="panel"><h2>4. Search for a USB device</h2><p>Opens the real WebUSB chooser. It searches devices the browser is allowed to offer, not every device on the console's USB bus.</p><div class="actions"><button id="usb">Open WebUSB picker</button></div><div class="term" style="margin-top:12px"><pre id="usbout">Waiting for test…</pre></div></section>
 <section class="panel"><h2>5. Safe USB descriptor inspection</h2><p>Shows details the browser already exposes about permitted USB devices. It does not open the controller, claim interfaces, reset it, or send USB data.</p><div class="actions"><button id="inspectUsb">Inspect permitted devices</button><button id="testInterface">Test interface 1 access (no data)</button></div><div class="term" style="margin-top:12px"><pre id="inspectUsbOut">Ready. No device opened and no data sent.</pre></div></section>
 <section class="panel"><h2>6. Test HID access to the controller</h2><p>WebHID is separate from WebUSB. First you can open its chooser; the targeted test checks whether the browser can open the controller HID device and inspect its report collections, without reading or writing reports.</p><div class="actions"><button id="hid">Open WebHID picker</button><button id="testHid">Test controller HID access (no data)</button></div><div class="term" style="margin-top:12px"><pre id="hidout">Waiting for test…</pre></div></section>
-<section class="panel"><h2>7. Send a + button signal</h2>
-<p>This is the first outbound-control test. Choose a controller that appears in the Gamepad API monitor, then tap the button below.</p>
-<div class="actions"><button id="plusSignal">Send + button signal</button></div>
-<div class="term" style="margin-top:12px"><pre id="plusout">Ready. No signal sent yet.</pre></div>
-<p class="muted">Important limitation: browser Gamepad API is input-only. A webpage cannot make a physical controller's + button become pressed, and controller button presses cannot be injected into the Switch this way. If the connected gamepad exposes a vibration actuator, this test can send a short vibration as an outbound signal, but vibration is not a + press.</p></section>
+<section class="panel"><h2>7. Read the + button over WebUSB</h2>
+<p>This test uses the Switch 2 Pro Controller's USB interface, not the Gamepad API. Select the controller, then press its physical + button when prompted. The test sends the documented USB initialization/report-selection commands, then checks incoming USB reports.</p>
+<div class="actions"><button id="plusSignal">Test + button over WebUSB</button></div>
+<div class="term" style="margin-top:12px"><pre id="plusout">Ready. No USB test started.</pre></div>
+<p class="muted">This can only detect a + press if the browser can claim the controller's HID interface and the controller streams reports over USB. It does not synthesize a + press or inject controls into the Switch. USB initialization may change the controller's USB reporting state; the test closes the device afterward.</p></section>
 <section class="panel"><h2>8. What the result means</h2><div class="status"><span class="good">Detected:</span> only means the browser reports an API or a device in its chooser.</div><div class="status"><span class="warn">Not detected:</span> does not mean the Joy-Con is broken. It may be connected only to the Switch, or Android may not expose it to this browser.</div><div class="status">Even if the phone sees a Joy-Con, this page cannot automatically make the same Joy-Con send inputs to both the phone and Switch. We need an actual supported connection/bridge for that, and this test does not bypass Nintendo's controller pairing.</div></section>
 <p class="muted">Privacy and safety: chooser actions require your tap. The interface and HID access tests may open a selected device, but they do not send controller commands or read input reports. The HID test only lists report-collection metadata and then closes the device.</p>
 </main><script>
@@ -47,21 +47,54 @@ if('usb'in navigator && navigator.usb.getDevices){navigator.usb.getDevices().the
 $('refresh').onclick=scan;
 $('plusSignal').onclick=async()=>{
  const out=$('plusout');
- if(!navigator.getGamepads){out.textContent='Gamepad API unavailable. No signal sent.';return;}
- const pads=[...navigator.getGamepads()].filter(Boolean);
- if(!pads.length){out.textContent='No gamepad is visible to this page. Connect/pair one to the phone and press a button first. No signal sent.';return;}
- const pad=pads.find(p=>p.vibrationActuator || (p.hapticActuators&&p.hapticActuators.length));
- if(!pad){out.textContent='Found controller(s): '+pads.map(p=>p.id).join('; ')+'\\nNo supported vibration actuator is exposed. The browser cannot send a + button press, so no command was sent.';return;}
+ if(!navigator.usb||!navigator.usb.requestDevice){out.textContent='WebUSB is unavailable in this browser/page context. No USB test started.';return;}
+ let d=null,opened=false,claimedVendor=false,claimedHid=false;
+ const timeout=(promise,ms,label)=>Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error(label+' timed out after '+ms+' ms')),ms))]);
+ const sendCommand=async(subcommand,payload)=>{
+  const data=new Uint8Array(8+payload.length);
+  data.set([0x03,0x91,0x00,subcommand,0x00,payload.length,0x00,0x00],0);
+  data.set(payload,8);
+  const result=await d.transferOut(2,data);
+  if(result.status!=='ok')throw new Error('USB command '+subcommand.toString(16)+' transfer status: '+result.status);
+ };
  try{
-  if(pad.vibrationActuator && typeof pad.vibrationActuator.playEffect==='function'){
-   await pad.vibrationActuator.playEffect('dual-rumble',{duration:180,strongMagnitude:0.35,weakMagnitude:0.2});
-  }else if(pad.hapticActuators && pad.hapticActuators[0] && typeof pad.hapticActuators[0].pulse==='function'){
-   await pad.hapticActuators[0].pulse(0.35,180);
-  }else{
-   out.textContent='A possible haptic actuator was listed, but this browser exposes no supported vibration method. No + press sent.';return;
+  d=await navigator.usb.requestDevice({filters:[{vendorId:0x057e,productId:0x2069}]});
+  out.textContent='Selected '+(d.productName||'controller')+'. Opening WebUSB…';
+  await d.open();opened=true;
+  await d.claimInterface(1);claimedVendor=true;
+  out.textContent='Claimed vendor interface 1. Initializing USB reports…';
+  // Community-documented Switch 2 Pro Controller USB initialization and report selection.
+  await sendCommand(0x0d,[0x01,0x00,0x31,0x7e,0xc6,0xeb,0xf1,0x48]);
+  await sendCommand(0x0a,[0x09,0x00,0x00,0x00]);
+  await d.releaseInterface(1);claimedVendor=false;
+  await d.claimInterface(0);claimedHid=true;
+  out.textContent='USB reporting initialized. Press and release the controller’s physical + button now. Listening for up to 4 seconds…';
+  const deadline=Date.now()+4000;
+  let reports=0,lastReport='none';
+  while(Date.now()<deadline){
+   const remaining=Math.max(250,deadline-Date.now());
+   const result=await timeout(d.transferIn(1,64),remaining,'Waiting for USB input report');
+   if(result.status!=='ok'||!result.data)continue;
+   const bytes=new Uint8Array(result.data.buffer,result.data.byteOffset,result.data.byteLength);
+   reports++;
+   lastReport=[...bytes].slice(0,12).map(x=>x.toString(16).padStart(2,'0')).join(' ');
+   // Report 0x09: report ID, counter, power, then the three button bytes.
+   if(bytes.length>=4&&bytes[0]===0x09&&(bytes[3]&0x40)){
+    out.textContent='SUCCESS: + button detected in a USB input report!\\nReports read: '+reports+'\\nSample: '+lastReport+'\\nThe page read the physical button state; it did not press + or send input to the Switch.';
+    return;
+   }
   }
-  out.textContent='Sent a short vibration request to: '+pad.id+'\\nThis confirms only a haptic output path. It did NOT press + and did NOT send input to the Switch.';
- }catch(e){out.textContent='Vibration request failed: '+e.name+': '+e.message+'\\nNo + button press was sent.';}
+  out.textContent='USB connection opened and report mode selected, but no + press was confirmed in the listening window.\\nReports received: '+reports+'\\nLast report bytes: '+lastReport+'\\nIf reports were 0, this browser may not be able to read interface 0, or the controller may not be streaming over USB.';
+ }catch(e){
+  out.textContent='WebUSB + button test failed: '+e.name+': '+e.message+'\\nNo + press was sent to the Switch. Cleanup will be attempted.';
+ }finally{
+  if(d){
+   try{if(claimedHid)await d.releaseInterface(0);}catch(e){}
+   try{if(claimedVendor)await d.releaseInterface(1);}catch(e){}
+   try{if(opened)await d.close();}catch(e){}
+  }
+  if(!out.textContent.includes('SUCCESS: + button detected'))out.textContent+='\\nCleanup attempted: claimed interfaces released and USB device closed.';
+ }
 };
 $('gamepad').onclick=()=>{if(!navigator.getGamepads){$('checks').insertAdjacentHTML('beforeend','<div class="status">Gamepads: API unavailable</div>');return}const pads=[...navigator.getGamepads()].filter(Boolean);$('checks').insertAdjacentHTML('beforeend','<div class="status"><strong>Gamepads currently visible:</strong> '+(pads.length?pads.map(p=>p.id+' (index '+p.index+')').join('; '):'none')+'</div>');renderPads();};
 function renderPads(){
