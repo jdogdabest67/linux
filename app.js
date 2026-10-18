@@ -304,6 +304,41 @@
     $("remoteButtonState").textContent = "Local webpage button activated " + demoPressCount + " time(s).";
   });
 
+  // Read-only probe: inspect the possible applet API without invoking it.
+  function checkSwitchApi() {
+    const status = $("switchApiStatus");
+    const output = $("switchApiOutput");
+    let nxValue;
+    let endAppletValue;
+    let accessError = null;
+    try {
+      nxValue = window.nx;
+      endAppletValue = nxValue == null ? undefined : nxValue.endApplet;
+    } catch (error) {
+      accessError = error.name + ": " + error.message;
+    }
+
+    if (accessError) {
+      status.textContent = "Could not inspect the API: " + accessError;
+      output.textContent = "Property access threw an error. No API method was called.";
+      return;
+    }
+
+    const hasNx = typeof nxValue !== "undefined" && nxValue !== null;
+    const hasEndApplet = typeof endAppletValue === "function";
+    status.textContent = hasEndApplet
+      ? "A function named window.nx.endApplet is exposed. Not called."
+      : "The expected close-applet function was not found. Nothing was called.";
+    output.textContent = [
+      "window.nx: " + (hasNx ? "present (" + typeof nxValue + ")" : "undefined"),
+      "window.nx.endApplet: " + typeof endAppletValue,
+      "",
+      "Safety: this check only reads properties. It did not call endApplet or attempt to launch a game."
+    ].join("\\n");
+  }
+
+  $("checkSwitchApi").addEventListener("click", checkSwitchApi);
+
   $("rescan").addEventListener("click", showApiChecks);
   $("startMonitor").addEventListener("click", startMonitor);
   $("stopMonitor").addEventListener("click", stopMonitor);
