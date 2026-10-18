@@ -35,7 +35,7 @@ export default {
       return json({
         ok: true,
         service: "joygpt-signal-bridge",
-        version: "ws-lab-3",
+        version: "social-v1",
         websocketSupported: true
       });
     }
@@ -55,6 +55,11 @@ export default {
       const stub = env.SIGNAL_STORE.get(env.SIGNAL_STORE.idFromName("ws-" + session));
       // Do not wrap this response: its WebSocket upgrade must be preserved.
       return stub.fetch(request);
+    }
+
+    if (["/api/register", "/api/login", "/api/me", "/api/posts"].includes(url.pathname)) {
+      const stub = env.SIGNAL_STORE.get(env.SIGNAL_STORE.idFromName("jdogbrew-social-data-v1"));
+      return ensureCors(await stub.fetch(new Request("https://social-store.internal" + url.pathname + url.search, request)));
     }
 
     if (url.pathname === "/api/message" && request.method === "POST") {
@@ -114,6 +119,30 @@ export class SignalStore {
       });
       return new Response(null, { status: 101, webSocket: client });
     }
+    if (url.pathname === "/api/register" && request.method === "POST") return this.register(request);
+    if (url.pathname === "/api/login" && request.method === "POST") return this.login(request);
+    if (url.pathname === "/api/me" && request.method === "GET") {
+      const user = await this.authUser(request);
+      return user ? json({ ok: true, user: { username: user.username } }) : json({ ok: false, error: "Sign in required." }, 401);
+    }
+    if (url.pathname === "/api/posts" && request.method === "GET") {
+      const posts = (await this.ctx.storage.get("social-posts")) || [];
+      return json({ ok: true, posts: posts.slice(-100).reverse() });
+    }
+    if (url.pathname === "/api/posts" && request.method === "POST") {
+      const user = await this.authUser(request);
+      if (!user) return json({ ok: false, error: "Sign in required to post." }, 401);
+      let body;
+      try { body = await request.json(); } catch { return json({ ok: false, error: "Expected JSON." }, 400); }
+      const content = typeof body.content === "string" ? body.content.trim() : "";
+      if (!content || content.length > 1000) return json({ ok: false, error: "Post must contain 1–1000 characters." }, 400);
+      const posts = (await this.ctx.storage.get("social-posts")) || [];
+      const post = { id: crypto.randomUUID(), username: user.username, content, createdAt: Date.now() };
+      posts.push(post);
+      await this.ctx.storage.put("social-posts", posts.slice(-1000));
+      return json({ ok: true, post }, 201);
+    }
+
     if (request.method === "POST" && url.pathname === "/message") {
       const message = await request.json();
       const all = (await this.ctx.storage.get("messages")) || [];
@@ -127,6 +156,64 @@ export class SignalStore {
       return json({ ok: true, messages: all.filter(m => m.session === session).slice(-50) });
     }
     return json({ ok: false, error: "Not found." }, 404);
+  }
+
+  async hashPassword(password, salt) {
+    const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+    const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: 120000, hash: "SHA-256" }, material, 256);
+    return Array.from(new Uint8Array(bits), b => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  async authUser(request) {
+    const auth = request.headers.get("Authorization") || "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    if (!token || token.length > 200) return null;
+    const sessions = (await this.ctx.storage.get("social-sessions")) || {};
+    const session = sessions[token];
+    if (!session || session.expiresAt < Date.now()) return null;
+    const users = (await this.ctx.storage.get("social-users")) || {};
+    const user = users[session.username.toLowerCase()];
+    return user ? { username: user.username } : null;
+  }
+
+  async register(request) {
+    let body;
+    try { body = await request.json(); } catch { return json({ ok: false, error: "Expected JSON." }, 400); }
+    const username = typeof body.username === "string" ? body.username.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return json({ ok: false, error: "Username must be 3–20 letters, numbers, or underscores." }, 400);
+    if (password.length < 10 || password.length > 128) return json({ ok: false, error: "Password must be 10–128 characters." }, 400);
+    const users = (await this.ctx.storage.get("social-users")) || {};
+    const key = username.toLowerCase();
+    if (users[key]) return json({ ok: false, error: "That username is already taken." }, 409);
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const saltHex = Array.from(salt, b => b.toString(16).padStart(2, "0")).join("");
+    users[key] = { username, salt: saltHex, passwordHash: await this.hashPassword(password, salt) };
+    await this.ctx.storage.put("social-users", users);
+    const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
+    const sessions = (await this.ctx.storage.get("social-sessions")) || {};
+    sessions[token] = { username, expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 };
+    await this.ctx.storage.put("social-sessions", sessions);
+    return json({ ok: true, token, user: { username } }, 201);
+  }
+
+  async login(request) {
+    let body;
+    try { body = await request.json(); } catch { return json({ ok: false, error: "Expected JSON." }, 400); }
+    const username = typeof body.username === "string" ? body.username.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    if (username.length > 20 || password.length > 128) return json({ ok: false, error: "Invalid username or password." }, 400);
+    const users = (await this.ctx.storage.get("social-users")) || {};
+    const user = users[username.toLowerCase()];
+    if (!user) return json({ ok: false, error: "Invalid username or password." }, 401);
+    const salt = new Uint8Array(user.salt.match(/.{2}/g).map(v => parseInt(v, 16)));
+    const hash = await this.hashPassword(password, salt);
+    if (hash !== user.passwordHash) return json({ ok: false, error: "Invalid username or password." }, 401);
+    const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
+    const sessions = (await this.ctx.storage.get("social-sessions")) || {};
+    sessions[token] = { username: user.username, expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 };
+    await this.ctx.storage.put("social-sessions", sessions);
+    return json({ ok: true, token, user: { username: user.username } });
   }
 
   webSocketMessage(ws, message) {
