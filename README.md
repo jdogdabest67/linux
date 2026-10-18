@@ -6,6 +6,19 @@ A small static site for testing what the current phone browser can see. It inten
 
 https://jdogdabest67.github.io/linux/
 
+
+## Research workbench (Oct 18, 2026)
+
+The live page now has three additional read-only investigations:
+
+- **Binary file inspector:** choose a local file (up to 10 MiB) to view size, browser MIME type, SHA-256 when Web Crypto is available, the first 256 bytes as hex/ASCII, common file-signature clues, Shannon entropy, and printable strings with offsets. Results can be copied or downloaded as JSON. The file is inspected locally and is not uploaded by this tool.
+- **GitHub repository researcher:** scan a public GitHub repo's metadata and recursive file tree, list `.bin` paths with sizes and links, and extract relevant save/format lines from its README. This reads metadata through GitHub's public REST API; it does not download every binary file.
+- **Direct URL diagnostics:** request a small byte range from a pasted HTTP(S) URL, then record response status, elapsed time, content type/range headers, and a short first-chunk preview. It cancels body reading after the first response chunk.
+
+These are clues, not a save validator. Strings such as `GameProgressData`, `WorldData`, or `Checkpoint` can come from a schema or data table without proving that a file is a complete save. A successful file transfer also does not mean Switch 2 can import that file.
+
+Error code 2809-1209 is a Nintendo console error rather than an HTTP response code. Nintendo's [published support article](https://en-americas-support.nintendo.com/app/answers/detail/a_id/49828/kw/2809-1209) recommends trying a different internet access point. JoyGPT's URL test can help compare fetch behavior from a webpage, but cannot inspect the console's own error screen or prove that the direct navigation failure has the same cause.
+
 ## What remains
 
 - Browser capability check for secure context, WebUSB, WebHID, Web Serial, Web Bluetooth, and Gamepad API.
