@@ -105,13 +105,13 @@ export class SignalStore {
       const pair = new WebSocketPair();
       const client = pair[0];
       const server = pair[1];
+      this.ctx.acceptWebSocket(server);
       server.serializeAttachment({
         session: url.searchParams.get("session") || "",
         role,
         clientId,
         connectedAt: Date.now()
       });
-      this.ctx.acceptWebSocket(server);
       return new Response(null, { status: 101, webSocket: client });
     }
     if (request.method === "POST" && url.pathname === "/message") {
