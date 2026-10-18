@@ -115,7 +115,7 @@
         sessionInput.value = saved.session;
       }
       if (saved && typeof saved.endpoint === "string" && saved.endpoint.trim()) {
-        signalStatus.textContent = "Saved backend URL loaded for this browser. Ready to test.";
+        signalStatus.textContent = "Backend URL preconfigured. Ready to test.";
       }
     } catch (_) {
       // Storage may be disabled in private or restricted browser modes.
