@@ -61,14 +61,21 @@ $('plusSignal').onclick=async()=>{
   d=await navigator.usb.requestDevice({filters:[{vendorId:0x057e,productId:0x2069}]});
   out.textContent='Selected '+(d.productName||'controller')+'. Opening WebUSB…';
   await d.open();opened=true;
+  // Check the input interface first. Chrome may protect HID-class interfaces from WebUSB.
+  try{await d.claimInterface(0);claimedHid=true;}
+  catch(e){
+   if(e.name==='SecurityError'){
+    out.textContent='WebUSB can open the controller, but Chrome protects interface 0 because it is a HID-class interface. The browser cannot claim the interface needed for controller input reports, so this page cannot detect + over WebUSB here. No USB initialization commands were sent and no + press was sent to the Switch.';
+    return;
+   }
+   throw e;
+  }
   await d.claimInterface(1);claimedVendor=true;
-  out.textContent='Claimed vendor interface 1. Initializing USB reports…';
-  // Community-documented Switch 2 Pro Controller USB initialization and report selection.
+  out.textContent='Claimed input and vendor interfaces. Initializing USB reports…';
   await sendCommand(0x0d,[0x01,0x00,0x31,0x7e,0xc6,0xeb,0xf1,0x48]);
   await sendCommand(0x0a,[0x09,0x00,0x00,0x00]);
   await d.releaseInterface(1);claimedVendor=false;
-  await d.claimInterface(0);claimedHid=true;
-  out.textContent='USB reporting initialized. Press and release the controller’s physical + button now. Listening for up to 4 seconds…';
+  out.textContent='USB reporting initialized. Press the physical + button now. Listening for up to 4 seconds…';
   const deadline=Date.now()+4000;
   let reports=0,lastReport='none';
   while(Date.now()<deadline){
@@ -80,22 +87,21 @@ $('plusSignal').onclick=async()=>{
    const bytes=new Uint8Array(result.data.buffer,result.data.byteOffset,result.data.byteLength);
    reports++;
    lastReport=[...bytes].slice(0,12).map(x=>x.toString(16).padStart(2,'0')).join(' ');
-   // Report 0x09: report ID, counter, power, then the three button bytes.
    if(bytes.length>=4&&bytes[0]===0x09&&(bytes[3]&0x40)){
     out.textContent='SUCCESS: + button detected in a USB input report!\nReports read: '+reports+'\nSample: '+lastReport+'\nThe page read the physical button state; it did not press + or send input to the Switch.';
     return;
    }
   }
-  out.textContent='USB connection opened and report mode selected, but no + press was confirmed in the listening window.\nReports received: '+reports+'\nLast report bytes: '+lastReport+'\nIf reports were 0, this browser may not be able to read interface 0, or the controller may not be streaming over USB.';
+  out.textContent='USB connection opened, but no + press was confirmed. Reports received: '+reports+'. Last report: '+lastReport+'.';
  }catch(e){
   out.textContent='WebUSB + button test failed: '+e.name+': '+e.message+'\nNo + press was sent to the Switch. Cleanup will be attempted.';
  }finally{
   if(d){
-   try{if(claimedHid)await d.releaseInterface(0);}catch(e){}
    try{if(claimedVendor)await d.releaseInterface(1);}catch(e){}
+   try{if(claimedHid)await d.releaseInterface(0);}catch(e){}
    try{if(opened)await d.close();}catch(e){}
   }
-  if(!out.textContent.includes('SUCCESS: + button detected'))out.textContent+='\nCleanup attempted: claimed interfaces released and USB device closed.';
+  if(!out.textContent.includes('SUCCESS: + button detected')&&!out.textContent.includes('Chrome protects interface 0'))out.textContent+='\nCleanup attempted: claimed interfaces released and USB device closed.';
  }
 };
 $('gamepad').onclick=()=>{if(!navigator.getGamepads){$('checks').insertAdjacentHTML('beforeend','<div class="status">Gamepads: API unavailable</div>');return}const pads=[...navigator.getGamepads()].filter(Boolean);$('checks').insertAdjacentHTML('beforeend','<div class="status"><strong>Gamepads currently visible:</strong> '+(pads.length?pads.map(p=>p.id+' (index '+p.index+')').join('; '):'none')+'</div>');renderPads();};
