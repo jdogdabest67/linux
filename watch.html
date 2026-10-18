@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#10151c">
+<title>JoyGPT Watch · Camera Test</title>
+<style>
+:root{color-scheme:dark;--bg:#10151c;--panel:#18212b;--line:#2b3947;--text:#e8f0f7;--muted:#a9bac9;--green:#8bf0b0;--amber:#ffd27a;--blue:#91c8ff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#192939 0,#10151c 48%);color:var(--text);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
+main{max-width:760px;margin:auto;padding:26px 0 44px}h1{font-size:clamp(1.8rem,6vw,2.5rem);line-height:1.1;margin:.4rem 0 .7rem}h2{font-size:1.1rem;margin:0 0 .6rem}p{margin:.5rem 0 0}.muted,.small{color:var(--muted)}.small{font-size:.92rem}.panel{background:rgba(24,33,43,.94);border:1px solid var(--line);border-radius:16px;padding:17px;margin:14px 0}.eyebrow{color:var(--green);font-size:.78rem;font-weight:750;letter-spacing:.09em}a{color:var(--blue)}button{background:#263848;color:var(--text);border:1px solid #40566b;border-radius:11px;padding:11px 14px;font:inherit;font-weight:650;cursor:pointer}button.primary{background:#28553e;border-color:#578967}button:disabled{opacity:.45;cursor:not-allowed}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.note{border-left:3px solid var(--amber);padding:4px 0 4px 12px;color:var(--muted)}video,img{display:block;width:100%;max-height:58vh;object-fit:contain;background:#05080b;border:1px solid var(--line);border-radius:12px;margin-top:12px}[hidden]{display:none!important}
+</style>
+</head>
+<body><main>
+<span class="eyebrow">JOYGPT WATCH · MILESTONE 1</span>
+<h1>Game feed camera test 📺</h1>
+<p class="muted">Preview the TV on your phone while you play with both hands, then capture a still frame for gameplay hints.</p>
+<section class="panel">
+<h2>Camera controls</h2>
+<p class="small">Tap Start camera and allow access to the rear camera. Prop your phone securely and aim it at the TV.</p>
+<div class="actions"><button id="start" class="primary">Start camera</button><button id="capture" disabled>Capture frame</button><button id="stop" disabled>Stop camera</button></div>
+<p id="status" class="small" role="status" aria-live="polite">Camera is off.</p>
+<video id="video" autoplay muted playsinline hidden></video>
+<canvas id="canvas" hidden></canvas>
+<img id="still" alt="Captured gameplay frame" hidden>
+<p id="meta" class="small">No frame captured yet.</p>
+<div class="actions"><a id="download" hidden download="joygpt-game-frame.jpg">Download frame</a></div>
+</section>
+<section class="panel">
+<h2>What this version does</h2>
+<p class="small">✓ Shows a live camera preview and captures a still image.</p>
+<p class="small">Next: attach the captured frame to ChatGPT for hints, then build a secure connection to a vision-capable AI if we want automated analysis.</p>
+<p class="note">Privacy: the page does not upload or transmit camera video. The camera starts only when you press Start camera. Stop it when you finish. This page does not yet generate automatic AI hints.</p>
+</section>
+<p><a href="./">← Back to JoyGPT Controller Link Lab</a></p>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let stream = null;
+  let imageUrl = null;
+  function status(message) { $("status").textContent = message; }
+  async function startCamera() {
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+      status("Camera API unavailable. Open this page in a modern browser over HTTPS.");
+      return;
+    }
+    try {
+      stopCamera(false);
+      status("Requesting camera permission…");
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      const video = $("video");
+      video.srcObject = stream;
+      video.hidden = false;
+      await video.play();
+      $("capture").disabled = false;
+      $("stop").disabled = false;
+      status("Camera running. Aim at the TV, then tap Capture frame.");
+    } catch (error) {
+      status("Could not start camera (" + (error && error.name ? error.name : "CameraError") + "). Check browser permission and try again.");
+    }
+  }
+  function stopCamera(showStatus = true) {
+    if (stream) { stream.getTracks().forEach(track => track.stop()); stream = null; }
+    $("video").srcObject = null;
+    $("video").hidden = true;
+    $("capture").disabled = true;
+    $("stop").disabled = true;
+    if (showStatus) status("Camera stopped.");
+  }
+  function captureFrame() {
+    const video = $("video"), canvas = $("canvas");
+    if (!video.videoWidth || !video.videoHeight) { status("Wait for the camera preview to appear, then try again."); return; }
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(blob => {
+      if (!blob) { status("Capture failed. Please try again."); return; }
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+      imageUrl = URL.createObjectURL(blob);
+      $("still").src = imageUrl;
+      $("still").hidden = false;
+      $("download").href = imageUrl;
+      $("download").download = "joygpt-frame-" + new Date().toISOString().replace(/[:.]/g, "-") + ".jpg";
+      $("download").hidden = false;
+      $("meta").textContent = "Captured " + canvas.width + " × " + canvas.height + " pixels. Saved only in this page so far; not sent to an AI.";
+      status("Frame captured! Download it and attach it to ChatGPT for gameplay hints.");
+    }, "image/jpeg", 0.88);
+  }
+  $("start").addEventListener("click", startCamera);
+  $("stop").addEventListener("click", () => stopCamera());
+  $("capture").addEventListener("click", captureFrame);
+  window.addEventListener("pagehide", () => stopCamera(false));
+})();
+</script>
+</body></html>
