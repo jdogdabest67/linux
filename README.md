@@ -43,7 +43,7 @@ Open the live page on the phone, run the capability scan, and use the input moni
 
 ## Signal-test backend
 
-The static GitHub Pages site cannot store messages by itself. `worker.js` is a small Cloudflare Worker API and `wrangler.jsonc` binds a Durable Object to store the last 100 test messages. It accepts only `PING` test messages and returns JSON acknowledgements.
+The static GitHub Pages site cannot store messages by itself. `worker.js` is a small Cloudflare Worker API and `wrangler.jsonc` binds a Durable Object to store the last 100 test messages. It stores a small allowlist of test messages and webpage commands (`PING`, `SAY:...`, `FLASH`, and `PRESS:...`). Commands are polled by the page; this does not send controller input to a game.
 
 ### Deploy it
 
@@ -54,3 +54,15 @@ The static GitHub Pages site cannot store messages by itself. `worker.js` is a s
 5. On the Switch browser, press **Send PING from this browser**. On the phone, press **Check received messages**. A message shown on the phone proves the Switch browser's request reached the backend and was stored.
 
 This backend does **not** receive commands from the Switch operating system; it only receives HTTP requests made by a browser page. The API is public and intended for harmless test messages only. Do not send personal or sensitive data. The session code is a simple test filter, not strong authentication.
+
+
+## Remote webpage command experiment
+
+After the latest GitHub Pages update has deployed:
+
+1. Open the page on both phone and Switch 2, enter the same Worker URL and session code (`FRIES-001`).
+2. Set the phone's **This device is** menu to **Phone** and the Switch page to **Switch 2**.
+3. On the Switch page, press **Start listening** and wait for “ready for new commands.”
+4. On the phone, press **Say hello**, **Flash screen**, **Press demo A**, or **Press demo UP**. You can also edit the command field. The Switch webpage should react after its next poll (normally within about two seconds).
+
+Allowed commands: `SAY:your message`, `FLASH`, and `PRESS:A/B/X/Y/UP/DOWN/LEFT/RIGHT/START/SELECT`. A PRESS command programmatically activates only the test button on this webpage. It is **not** a real Switch controller press and does not control a game. This is a real remote-command test between browser pages and a stepping stone for investigating a genuine controller path.
