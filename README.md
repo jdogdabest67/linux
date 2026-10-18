@@ -66,3 +66,24 @@ After the latest GitHub Pages update has deployed:
 4. On the phone, press **Say hello**, **Flash screen**, **Press demo A**, or **Press demo UP**. You can also edit the command field. The Switch webpage should react after its next poll (normally within about two seconds).
 
 Allowed commands: `SAY:your message`, `FLASH`, and `PRESS:A/B/X/Y/UP/DOWN/LEFT/RIGHT/START/SELECT`. A PRESS command programmatically activates only the test button on this webpage. It is **not** a real Switch controller press and does not control a game. This is a real remote-command test between browser pages and a stepping stone for investigating a genuine controller path.
+
+
+## Live WebSocket test bench (new)
+
+The page includes a WebSocket link test and a webpage input-event recorder.
+
+- The WebSocket panel checks `GET /api/health` for version `ws-lab-1`, opens `/api/socket`, sends harmless text markers, and measures the sender's echo round-trip time. The Durable Object echoes to the sender and relays the same marker to other connected pages using the same session.
+- The input-event recorder logs ordinary DOM events visible to the page (`keydown`, `keyup`, `click`, `pointerdown/up`, and Gamepad API connection events). It cannot see protected browser/OS inputs, and it does not generate input.
+- Neither experiment controls the Switch operating system or sends controller input to a game.
+
+### Important: deploy the Worker update too
+
+GitHub Pages serves `index.html` and `app.js`; the backend is a separate Cloudflare Worker. The new WebSocket test will say the backend needs updating until the deployed Worker supports the `/api/health` endpoint with version `ws-lab-1` and the `/api/socket` route. Deploy the updated repository `worker.js` and its existing `wrangler.jsonc` Durable Object binding/migration through the same Cloudflare deployment method used originally. If the Worker is managed separately in the Cloudflare dashboard, changing this GitHub repository does not automatically update that deployed Worker unless the dashboard deployment is connected to this repository.
+
+### Why test WebSockets?
+
+The Switch browser reported that its `WebSocket` constructor is exposed. Browser WebSockets keep a two-way connection open, avoiding the repeated HTTP polling currently used by the remote-page demo. Cloudflare Durable Objects officially support WebSocket endpoints and relays. These findings make WebSockets worth testing as a transport, but do not imply that the browser can inject button presses into a game.
+
+References:
+- MDN, [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
+- Cloudflare, [Use WebSockets with Durable Objects](https://developers.cloudflare.com/durable-objects/best-practices/websockets/)
