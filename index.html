@@ -184,7 +184,7 @@ footer{font-size:.82rem;color:var(--muted);padding:10px 2px}
   <h2>7. Live WebSocket link test</h2>
   <p class="small">This opens a real, persistent connection through the JoyGPT Worker. Connect the phone and Switch pages with the same session and their correct roles, then send a marker from either one. Each sender should see a server echo with round-trip time; the other connected page should show a peer relay.</p>
   <p class="note">This tests a live message pipe only. The Worker must be updated and redeployed in Cloudflare too. Updating GitHub Pages alone does not update the backend.</p>
-  <label for="wsTestMessage">Test marker</label>
+  <label for="wsTestMessage">Legacy latency-test marker</label>
   <input id="wsTestMessage" type="text" value="HELLO FROM JOYGPT" maxlength="200" autocomplete="off" style="display:block;width:100%;margin:6px 0 12px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
   <div class="actions">
     <button type="button" id="connectWebSocketTest" class="primary">Connect WebSocket</button>
@@ -192,10 +192,28 @@ footer{font-size:.82rem;color:var(--muted);padding:10px 2px}
     <button type="button" id="runWebSocketBurst">Run 10-marker latency test</button>
     <button type="button" id="disconnectWebSocketTest">Disconnect</button>
   </div>
+  <h3 style="margin:18px 0 6px">Send a typed message</h3>
+  <label for="wsTypedKind">Message type</label>
+  <select id="wsTypedKind" style="display:block;width:100%;margin:6px 0 10px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
+    <option value="text">Plain text</option>
+    <option value="json">Structured JSON</option>
+    <option value="event">Event / data object</option>
+    <option value="meta">Metadata object</option>
+  </select>
+  <label for="wsTypedPayload">Message content</label>
+  <textarea id="wsTypedPayload" rows="3" style="display:block;width:100%;margin:6px 0 10px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">{"message":"hello from JoyGPT","source":"phone"}</textarea>
+  <button type="button" id="sendTypedWebSocketMessage">Send typed message</button>
+  <h3 style="margin:18px 0 6px">Send a file</h3>
+  <p class="small">Choose an image, audio clip, video clip, or other file up to 10 MB. Files are split into small binary packets and relayed through the Worker. This is file transfer, not a live camera/microphone stream.</p>
+  <input id="wsFileInput" type="file" accept="image/*,audio/*,video/*" style="display:block;width:100%;margin:8px 0;color:var(--text)">
+  <button type="button" id="sendWebSocketFile">Send selected file</button>
+  <div id="wsFileStatus" class="small" aria-live="polite" style="margin-top:8px">No file transfer yet.</div>
+  <h3 style="margin:18px 0 6px">Received files</h3>
+  <div id="wsReceivedFiles" class="small">Received images, audio, video, and other files will appear here with a preview or download link.</div>
   <div id="wsTestStatus" class="small" aria-live="polite" style="margin-top:10px">Not connected.</div>
   <div id="wsCount" class="small">Messages observed: 0</div>
   <div id="wsRttSummary" class="small">No echo samples yet.</div>
-  <div class="terminal"><pre id="wsTestOutput">Connect both pages after the Worker update, then send a marker.</pre></div>
+  <div class="terminal"><pre id="wsTestOutput">Connect both pages with the same session. Test text first, then structured JSON and a small file.</pre></div>
 </section>
 
 <section class="panel">
