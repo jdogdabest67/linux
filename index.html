@@ -125,6 +125,17 @@ footer{font-size:.82rem;color:var(--muted);padding:10px 2px}
 </section>
 
 <section class="panel">
+  <h2>5. Check for a Switch browser applet API</h2>
+  <p class="small">This is a read-only capability check. It inspects whether the page can see <code>window.nx</code> and whether <code>window.nx.endApplet</code> is a function. It does not call the function or close the browser.</p>
+  <div class="actions">
+    <button type="button" id="checkSwitchApi" class="primary">Check Switch API</button>
+  </div>
+  <div id="switchApiStatus" class="small" aria-live="polite" style="margin-top:10px">Not checked yet.</div>
+  <div class="terminal"><pre id="switchApiOutput">Tap “Check Switch API” to inspect what this page can access.</pre></div>
+  <p class="note">A missing API means this browser page cannot use that method. A present function would only show that the method is exposed, not guarantee it works or that it can launch a game.</p>
+</section>
+
+<section class="panel">
   <h2>Why the two tempting routes do not solve it</h2>
   <div class="status">
     <span class="dot warn"></span>
