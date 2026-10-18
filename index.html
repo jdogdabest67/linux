@@ -72,28 +72,30 @@ $('plusSignal').onclick=async()=>{
   const deadline=Date.now()+4000;
   let reports=0,lastReport='none';
   while(Date.now()<deadline){
-   const remaining=Math.max(250,deadline-Date.now());
-   const result=await timeout(d.transferIn(1,64),remaining,'Waiting for USB input report');
+   const remaining=Math.max(1,deadline-Date.now());
+   let result;
+   try{result=await timeout(d.transferIn(1,64),remaining,'Waiting for USB input report');}
+   catch(readError){if(Date.now()>=deadline)break;throw readError;}
    if(result.status!=='ok'||!result.data)continue;
    const bytes=new Uint8Array(result.data.buffer,result.data.byteOffset,result.data.byteLength);
    reports++;
    lastReport=[...bytes].slice(0,12).map(x=>x.toString(16).padStart(2,'0')).join(' ');
    // Report 0x09: report ID, counter, power, then the three button bytes.
    if(bytes.length>=4&&bytes[0]===0x09&&(bytes[3]&0x40)){
-    out.textContent='SUCCESS: + button detected in a USB input report!\\nReports read: '+reports+'\\nSample: '+lastReport+'\\nThe page read the physical button state; it did not press + or send input to the Switch.';
+    out.textContent='SUCCESS: + button detected in a USB input report!\nReports read: '+reports+'\nSample: '+lastReport+'\nThe page read the physical button state; it did not press + or send input to the Switch.';
     return;
    }
   }
-  out.textContent='USB connection opened and report mode selected, but no + press was confirmed in the listening window.\\nReports received: '+reports+'\\nLast report bytes: '+lastReport+'\\nIf reports were 0, this browser may not be able to read interface 0, or the controller may not be streaming over USB.';
+  out.textContent='USB connection opened and report mode selected, but no + press was confirmed in the listening window.\nReports received: '+reports+'\nLast report bytes: '+lastReport+'\nIf reports were 0, this browser may not be able to read interface 0, or the controller may not be streaming over USB.';
  }catch(e){
-  out.textContent='WebUSB + button test failed: '+e.name+': '+e.message+'\\nNo + press was sent to the Switch. Cleanup will be attempted.';
+  out.textContent='WebUSB + button test failed: '+e.name+': '+e.message+'\nNo + press was sent to the Switch. Cleanup will be attempted.';
  }finally{
   if(d){
    try{if(claimedHid)await d.releaseInterface(0);}catch(e){}
    try{if(claimedVendor)await d.releaseInterface(1);}catch(e){}
    try{if(opened)await d.close();}catch(e){}
   }
-  if(!out.textContent.includes('SUCCESS: + button detected'))out.textContent+='\\nCleanup attempted: claimed interfaces released and USB device closed.';
+  if(!out.textContent.includes('SUCCESS: + button detected'))out.textContent+='\nCleanup attempted: claimed interfaces released and USB device closed.';
  }
 };
 $('gamepad').onclick=()=>{if(!navigator.getGamepads){$('checks').insertAdjacentHTML('beforeend','<div class="status">Gamepads: API unavailable</div>');return}const pads=[...navigator.getGamepads()].filter(Boolean);$('checks').insertAdjacentHTML('beforeend','<div class="status"><strong>Gamepads currently visible:</strong> '+(pads.length?pads.map(p=>p.id+' (index '+p.index+')').join('; '):'none')+'</div>');renderPads();};
