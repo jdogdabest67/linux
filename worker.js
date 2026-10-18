@@ -22,12 +22,14 @@ export default {
       try { body = await request.json(); } catch { return json({ ok: false, error: "Expected JSON body." }, 400); }
       const session = typeof body.session === "string" ? body.session.trim() : "";
       const id = typeof body.id === "string" ? body.id.slice(0, 80) : "";
-      const from = typeof body.from === "string" ? body.from.slice(0, 32) : "browser";
-      const text = typeof body.text === "string" ? body.text.slice(0, 120) : "";
+      const requestedFrom = typeof body.from === "string" ? body.from : "browser";
+      const from = ["phone", "switch", "browser"].includes(requestedFrom) ? requestedFrom : "browser";
+      const text = typeof body.text === "string" ? body.text.trim().slice(0, 120) : "";
       if (session.length < 4 || session.length > 64 || !/^[a-zA-Z0-9_-]+$/.test(session)) {
         return json({ ok: false, error: "Session must be 4-64 letters, numbers, underscores, or hyphens." }, 400);
       }
-      if (!id || text !== "PING") return json({ ok: false, error: "Only short PING test messages are accepted." }, 400);
+      const allowedCommand = text === "PING" || text === "FLASH" || /^SAY:.{1,110}$/s.test(text) || /^PRESS:(A|B|X|Y|UP|DOWN|LEFT|RIGHT|START|SELECT)$/.test(text);
+      if (!id || !allowedCommand) return json({ ok: false, error: "Allowed messages: PING, FLASH, SAY:your message, or PRESS:A/B/X/Y/UP/DOWN/LEFT/RIGHT/START/SELECT." }, 400);
       const stub = env.SIGNAL_STORE.get(env.SIGNAL_STORE.idFromName("shared-test-store"));
       return stub.fetch("https://signal-store.internal/message", {
         method: "POST",
