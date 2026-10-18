@@ -339,6 +339,8 @@
   let socketClientId = "joygpt-" + Math.random().toString(36).slice(2, 10);
   const socketPending = new Map();
   let socketMessageCount = 0;
+  let socketRttSamples = [];
+  let burstRunId = 0;
 
   function addSocketLog(line) {
     const log = $("wsTestOutput");
@@ -405,8 +407,20 @@
         }
         const isOwnEcho = data.toClientId === socketClientId;
         const sentAt = socketPending.get(data.id);
-        const rtt = isOwnEcho && sentAt ? " · round trip " + (Date.now() - sentAt) + " ms" : "";
-        if (isOwnEcho && sentAt) socketPending.delete(data.id);
+        const rttValue = isOwnEcho && sentAt ? Date.now() - sentAt : null;
+        const rtt = rttValue !== null ? " · round trip " + rttValue + " ms" : "";
+        if (isOwnEcho && sentAt) {
+          socketPending.delete(data.id);
+          socketRttSamples.push(rttValue);
+          if (socketRttSamples.length > 50) socketRttSamples.shift();
+          $("wsRttSummary").textContent = socketRttSamples.length
+            ? "Recent echo RTT: min " + Math.min(...socketRttSamples) + " ms · avg " + Math.round(socketRttSamples.reduce((sum, n) => sum + n, 0) / socketRttSamples.length) + " ms · max " + Math.max(...socketRttSamples) + " ms (" + socketRttSamples.length + " sample(s))"
+            : "No echo samples yet.";
+        }
+        if (isOwnEcho && data.id.startsWith("BURST-" + burstRunId + "-")) {
+          const burst = window.__joygptBurst;
+          if (burst && burst.runId === burstRunId) burst.received += 1;
+        }
         const direction = isOwnEcho ? "SERVER ECHO" : "PEER RELAY";
         addSocketLog(direction + " from " + data.fromRole + ": " + data.text + rtt);
       });
@@ -444,6 +458,45 @@
     }
   }
 
+  function runWebSocketBurst() {
+    const status = $("wsTestStatus");
+    if (!testSocket || testSocket.readyState !== WebSocket.OPEN) {
+      status.textContent = "Connect this browser first.";
+      return;
+    }
+    const runId = ++burstRunId;
+    const prefix = "BURST-" + runId + "-";
+    const startedAt = Date.now();
+    window.__joygptBurst = { runId, received: 0, expected: 10 };
+    status.textContent = "Sending 10 small test markers 150 ms apart…";
+    for (let i = 0; i < 10; i += 1) {
+      window.setTimeout(() => {
+        if (runId !== burstRunId || !testSocket || testSocket.readyState !== WebSocket.OPEN) return;
+        const id = prefix + (i + 1);
+        const sentAt = Date.now();
+        socketPending.set(id, sentAt);
+        try {
+          testSocket.send(JSON.stringify({
+            type: "probe",
+            id,
+            sentAt,
+            text: "BURST marker " + (i + 1) + "/10"
+          }));
+        } catch (error) {
+          socketPending.delete(id);
+          addSocketLog("Burst send failed: " + error.name + ": " + error.message);
+        }
+      }, i * 150);
+    }
+    window.setTimeout(() => {
+      if (runId !== burstRunId) return;
+      const burst = window.__joygptBurst;
+      status.textContent = "Burst finished in " + (Date.now() - startedAt) +
+        " ms. Server echoes received before cutoff: " + (burst ? burst.received : 0) +
+        "/10. Check the RTT summary and peer relay log.";
+    }, 3500);
+  }
+
   function disconnectWebSocketTest() {
     if (testSocket) {
       try { testSocket.close(1000, "Stopped by user"); } catch (_) {}
@@ -454,45 +507,122 @@
 
   $("connectWebSocketTest").addEventListener("click", connectWebSocketTest);
   $("sendWebSocketTest").addEventListener("click", sendWebSocketProbe);
+  $("runWebSocketBurst").addEventListener("click", runWebSocketBurst);
   $("disconnectWebSocketTest").addEventListener("click", disconnectWebSocketTest);
   window.addEventListener("pagehide", disconnectWebSocketTest);
 
-  // Record only ordinary DOM events visible to this page. This may reveal
-  // browser-delivered key/click events, but cannot inspect protected system input.
+  // Record only ordinary DOM events visible to this page. Text-entry fields
+  // are excluded so typed text/passwords are not logged or relayed.
   let eventProbeActive = false;
   const inputEventLog = [];
+  const inputEventCounts = new Map();
+
+  function renderInputEventSummary() {
+    const summary = Array.from(inputEventCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+      .map(([label, count]) => label + " ×" + count);
+    $("inputEventSummary").textContent = summary.length
+      ? "Observed patterns: " + summary.join(" · ")
+      : "No input patterns yet.";
+  }
+
   function recordPageInputEvent(event) {
     if (!eventProbeActive) return;
-    if (event.target && event.target.closest && event.target.closest("#startEventProbe, #stopEventProbe")) return;
+    if (event.target && event.target.closest) {
+      if (event.target.closest("#startEventProbe, #stopEventProbe, #syntheticEventProbe")) return;
+      if (event.target.closest("input, textarea, select, [contenteditable='true']")) return;
+    }
     const target = event.target;
     const targetName = target ? ((target.tagName || "node") + (target.id ? "#" + target.id : "")) : "(no target)";
-    const details = event.type + " target=" + targetName +
-      (event.key ? " key=" + JSON.stringify(event.key) : "") +
-      (event.code ? " code=" + event.code : "") +
-      (typeof event.button === "number" ? " button=" + event.button : "") +
-      (typeof event.clientX === "number" ? " xy=" + event.clientX + "," + event.clientY : "") +
-      (event.isTrusted ? " trusted" : " synthetic");
-    inputEventLog.push(new Date().toLocaleTimeString() + "  " + details);
-    while (inputEventLog.length > 80) inputEventLog.shift();
+    const fields = [
+      event.type,
+      "target=" + targetName,
+      event.key ? "key=" + JSON.stringify(event.key) : "",
+      event.code ? "code=" + event.code : "",
+      typeof event.button === "number" ? "button=" + event.button : "",
+      typeof event.clientX === "number" ? "xy=" + event.clientX + "," + event.clientY : "",
+      typeof event.repeat === "boolean" ? "repeat=" + event.repeat : "",
+      event.shiftKey ? "shift" : "",
+      event.ctrlKey ? "ctrl" : "",
+      event.altKey ? "alt" : "",
+      event.metaKey ? "meta" : "",
+      "trusted=" + Boolean(event.isTrusted),
+      event.defaultPrevented ? "defaultPrevented=true" : ""
+    ].filter(Boolean);
+    const details = fields.join(" ");
+    const stamp = new Date().toLocaleTimeString() + " +" + performance.now().toFixed(1) + "ms ";
+    const line = stamp + details;
+    inputEventLog.push(line);
+    while (inputEventLog.length > 100) inputEventLog.shift();
+    const mappingLabel = event.type + (event.key ? " key=" + event.key : "") + (event.code ? " code=" + event.code : "");
+    inputEventCounts.set(mappingLabel, (inputEventCounts.get(mappingLabel) || 0) + 1);
     $("inputEventOutput").textContent = inputEventLog.join("\n");
     $("inputEventCount").textContent = "Events captured: " + inputEventLog.length;
+    renderInputEventSummary();
+
+    // Optional, explicit telemetry relay to the other browser. It carries only
+    // the summarized DOM event and never sends controller input to the console.
+    const relayBox = $("streamInputEvents");
+    if (relayBox && relayBox.checked && testSocket && testSocket.readyState === WebSocket.OPEN) {
+      const text = "INPUT_EVENT " + details;
+      const id = "INPUT-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 7).toUpperCase();
+      try {
+        testSocket.send(JSON.stringify({ type: "probe", id, sentAt: Date.now(), text: text.slice(0, 200) }));
+      } catch (error) {
+        $("inputEventStatus").textContent = "Event captured locally, but relay failed: " + error.name;
+      }
+    }
   }
+
   const pageInputEventNames = ["keydown", "keyup", "click", "pointerdown", "pointerup", "gamepadconnected", "gamepaddisconnected"];
   function startEventProbe() {
     inputEventLog.length = 0;
+    inputEventCounts.clear();
     eventProbeActive = true;
     pageInputEventNames.forEach(name => window.addEventListener(name, recordPageInputEvent, true));
-    $("inputEventOutput").textContent = "Listening. Try D-pad, A, B, and back/cancel on the controller while this page is visible.";
-    $("inputEventStatus").textContent = "Recorder active. Only events delivered to this webpage will appear.";
+    $("inputEventOutput").textContent = "Listening. Focus the blank page area, then try D-pad, A, B, and back/cancel.";
+    $("inputEventStatus").textContent = $("streamInputEvents").checked
+      ? (testSocket && testSocket.readyState === WebSocket.OPEN
+          ? "Recorder active. Event telemetry is also being sent to the connected peer."
+          : "Recorder active locally. Connect this page's WebSocket to relay events to the phone.")
+      : "Recorder active locally. Text-entry fields are excluded.";
     $("inputEventCount").textContent = "Events captured: 0";
+    renderInputEventSummary();
   }
   function stopEventProbe() {
     eventProbeActive = false;
     pageInputEventNames.forEach(name => window.removeEventListener(name, recordPageInputEvent, true));
-    $("inputEventStatus").textContent = "Recorder stopped. " + inputEventLog.length + " event(s) captured.";
+    if ($("inputEventStatus")) $("inputEventStatus").textContent = "Recorder stopped. " + inputEventLog.length + " event(s) captured.";
+  }
+  function runSyntheticEventTest() {
+    const probe = new KeyboardEvent("keydown", { key: "A", code: "KeyA", bubbles: true, cancelable: true });
+    let trustObserved = "listener not reached";
+    const readTrust = event => { if (event === probe) trustObserved = String(event.isTrusted); };
+    window.addEventListener("keydown", readTrust, true);
+    window.dispatchEvent(probe);
+    window.removeEventListener("keydown", readTrust, true);
+    $("syntheticEventStatus").textContent = "Synthetic page-only keydown observed; isTrusted=" + trustObserved +
+      ". This touches only this webpage's DOM, not the Switch OS or a game.";
   }
   $("startEventProbe").addEventListener("click", startEventProbe);
   $("stopEventProbe").addEventListener("click", stopEventProbe);
+  $("syntheticEventProbe").addEventListener("click", runSyntheticEventTest);
+  $("copyInputEvents").addEventListener("click", () => {
+    const content = inputEventLog.join("\n");
+    if (!content) {
+      $("inputEventStatus").textContent = "No events to copy yet.";
+      return;
+    }
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(content).then(
+        () => { $("inputEventStatus").textContent = "Input log copied."; },
+        () => { $("inputEventStatus").textContent = "Clipboard blocked. Select the log manually to copy it."; }
+      );
+    } else {
+      $("inputEventStatus").textContent = "Clipboard unavailable. Select the log manually to copy it.";
+    }
+  });
   window.addEventListener("pagehide", stopEventProbe);
 
   // Read-only Switch/browser environment diagnostics. No permissions are requested.
