@@ -333,6 +333,168 @@
     $("remoteButtonState").textContent = "Local webpage button activated " + demoPressCount + " time(s).";
   });
 
+  // Live WebSocket transport experiment. It tests browser-to-server and
+  // browser-to-browser messaging only; it never generates controller/game input.
+  let testSocket = null;
+  let socketClientId = "joygpt-" + Math.random().toString(36).slice(2, 10);
+  const socketPending = new Map();
+  let socketMessageCount = 0;
+
+  function addSocketLog(line) {
+    const log = $("wsTestOutput");
+    const existing = log.textContent && !log.textContent.startsWith("Connect") ? log.textContent.split("\\n") : [];
+    existing.push(new Date().toLocaleTimeString() + "  " + line);
+    log.textContent = existing.slice(-60).join("\\n");
+    socketMessageCount += 1;
+    $("wsCount").textContent = "Messages observed: " + socketMessageCount;
+  }
+
+  async function connectWebSocketTest() {
+    const status = $("wsTestStatus");
+    let config;
+    try { config = getSignalConfig(); } catch (error) {
+      status.textContent = error.message;
+      return;
+    }
+    if (typeof window.WebSocket !== "function") {
+      status.textContent = "This browser does not expose the WebSocket constructor.";
+      return;
+    }
+    if (testSocket) {
+      try { testSocket.close(1000, "Reconnecting test"); } catch (_) {}
+      testSocket = null;
+    }
+    status.textContent = "Checking whether the deployed Worker supports the WebSocket lab…";
+    try {
+      const health = await fetch(config.endpoint + "/api/health", { cache: "no-store" });
+      const data = await health.json();
+      if (!health.ok || !data.ok || data.version !== "ws-lab-1" || !data.websocketSupported) {
+        status.textContent = "The deployed Worker needs the WebSocket-lab update. Update/redeploy worker.js in Cloudflare, then retry. Health response: " + JSON.stringify(data);
+        return;
+      }
+    } catch (error) {
+      status.textContent = "Backend health check failed: " + error.message + ". The Worker may not have been redeployed yet.";
+      return;
+    }
+
+    const wsUrl = config.endpoint.replace(/^https:/i, "wss:").replace(/^http:/i, "ws:") +
+      "/api/socket?session=" + encodeURIComponent(config.session) +
+      "&role=" + encodeURIComponent(getDeviceRole()) +
+      "&clientId=" + encodeURIComponent(socketClientId);
+    status.textContent = "Opening secure WebSocket…";
+    try {
+      const socket = new WebSocket(wsUrl);
+      testSocket = socket;
+      socket.addEventListener("open", () => {
+        status.textContent = "WebSocket connected as " + getDeviceRole() + ". Now send a marker from the other page.";
+        addSocketLog("CONNECTED; protocol=" + (socket.protocol || "(none)") + "; readyState=" + socket.readyState);
+      });
+      socket.addEventListener("message", (event) => {
+        let data;
+        try { data = JSON.parse(event.data); } catch (_) {
+          addSocketLog("Received non-JSON frame: " + String(event.data).slice(0, 160));
+          return;
+        }
+        if (data.type === "error") {
+          addSocketLog("SERVER ERROR: " + (data.error || "unknown"));
+          return;
+        }
+        if (data.type !== "relay") {
+          addSocketLog("Received frame: " + JSON.stringify(data).slice(0, 250));
+          return;
+        }
+        const isOwnEcho = data.toClientId === socketClientId;
+        const sentAt = socketPending.get(data.id);
+        const rtt = isOwnEcho && sentAt ? " · round trip " + (Date.now() - sentAt) + " ms" : "";
+        if (isOwnEcho && sentAt) socketPending.delete(data.id);
+        const direction = isOwnEcho ? "SERVER ECHO" : "PEER RELAY";
+        addSocketLog(direction + " from " + data.fromRole + ": " + data.text + rtt);
+      });
+      socket.addEventListener("error", () => {
+        status.textContent = "WebSocket error. Check Worker deployment/network access; see the log for earlier clues.";
+        addSocketLog("SOCKET ERROR (browser intentionally hides the detailed handshake reason).");
+      });
+      socket.addEventListener("close", (event) => {
+        if (testSocket === socket) testSocket = null;
+        status.textContent = "WebSocket closed. code=" + event.code + ", clean=" + event.wasClean + (event.reason ? ", reason=" + event.reason : "");
+        addSocketLog("CLOSED code=" + event.code + " clean=" + event.wasClean);
+      });
+    } catch (error) {
+      status.textContent = "Could not create WebSocket: " + error.name + ": " + error.message;
+    }
+  }
+
+  function sendWebSocketProbe() {
+    const status = $("wsTestStatus");
+    if (!testSocket || testSocket.readyState !== WebSocket.OPEN) {
+      status.textContent = "Connect this browser first.";
+      return;
+    }
+    const text = $("wsTestMessage").value.trim().slice(0, 200) || "HELLO";
+    const id = "WS-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 7).toUpperCase();
+    const sentAt = Date.now();
+    socketPending.set(id, sentAt);
+    try {
+      testSocket.send(JSON.stringify({ type: "probe", id, sentAt, text }));
+      addSocketLog("SENT marker: " + text);
+      status.textContent = "Sent marker. Expect a server echo here and a peer relay on the other connected browser.";
+    } catch (error) {
+      socketPending.delete(id);
+      status.textContent = "Send failed: " + error.name + ": " + error.message;
+    }
+  }
+
+  function disconnectWebSocketTest() {
+    if (testSocket) {
+      try { testSocket.close(1000, "Stopped by user"); } catch (_) {}
+      testSocket = null;
+    }
+    $("wsTestStatus").textContent = "WebSocket test disconnected.";
+  }
+
+  $("connectWebSocketTest").addEventListener("click", connectWebSocketTest);
+  $("sendWebSocketTest").addEventListener("click", sendWebSocketProbe);
+  $("disconnectWebSocketTest").addEventListener("click", disconnectWebSocketTest);
+  window.addEventListener("pagehide", disconnectWebSocketTest);
+
+  // Record only ordinary DOM events visible to this page. This may reveal
+  // browser-delivered key/click events, but cannot inspect protected system input.
+  let eventProbeActive = false;
+  const inputEventLog = [];
+  function recordPageInputEvent(event) {
+    if (!eventProbeActive) return;
+    if (event.target && event.target.closest && event.target.closest("#startEventProbe, #stopEventProbe")) return;
+    const target = event.target;
+    const targetName = target ? ((target.tagName || "node") + (target.id ? "#" + target.id : "")) : "(no target)";
+    const details = event.type + " target=" + targetName +
+      (event.key ? " key=" + JSON.stringify(event.key) : "") +
+      (event.code ? " code=" + event.code : "") +
+      (typeof event.button === "number" ? " button=" + event.button : "") +
+      (typeof event.clientX === "number" ? " xy=" + event.clientX + "," + event.clientY : "") +
+      (event.isTrusted ? " trusted" : " synthetic");
+    inputEventLog.push(new Date().toLocaleTimeString() + "  " + details);
+    while (inputEventLog.length > 80) inputEventLog.shift();
+    $("inputEventOutput").textContent = inputEventLog.join("\\n");
+    $("inputEventCount").textContent = "Events captured: " + inputEventLog.length;
+  }
+  const pageInputEventNames = ["keydown", "keyup", "click", "pointerdown", "pointerup", "gamepadconnected", "gamepaddisconnected"];
+  function startEventProbe() {
+    inputEventLog.length = 0;
+    eventProbeActive = true;
+    pageInputEventNames.forEach(name => window.addEventListener(name, recordPageInputEvent, true));
+    $("inputEventOutput").textContent = "Listening. Try D-pad, A, B, and back/cancel on the controller while this page is visible.";
+    $("inputEventStatus").textContent = "Recorder active. Only events delivered to this webpage will appear.";
+    $("inputEventCount").textContent = "Events captured: 0";
+  }
+  function stopEventProbe() {
+    eventProbeActive = false;
+    pageInputEventNames.forEach(name => window.removeEventListener(name, recordPageInputEvent, true));
+    $("inputEventStatus").textContent = "Recorder stopped. " + inputEventLog.length + " event(s) captured.";
+  }
+  $("startEventProbe").addEventListener("click", startEventProbe);
+  $("stopEventProbe").addEventListener("click", stopEventProbe);
+  window.addEventListener("pagehide", stopEventProbe);
+
   // Read-only Switch/browser environment diagnostics. No permissions are requested.
   function runSwitchTests() {
     const output = $("switchTestsOutput");
