@@ -271,8 +271,53 @@ footer{font-size:.82rem;color:var(--muted);padding:10px 2px}
   <p class="note">Current blocker: none of our listed devices is known to act as a Switch-compatible controller controlled by our webpage. We can continue network and event mapping now, but real gameplay needs that final controller-emulation route.</p>
 </section>
 
+
+<section class="panel" id="fileResearchPanel">
+  <h2>10. Binary file inspector</h2>
+  <p class="small">Choose a downloaded file to inspect it locally. This checks size, SHA-256, the first bytes, common file signatures, binary entropy, and readable strings with their byte offsets. The file is not uploaded by this inspector.</p>
+  <p class="note">A recognizable string or header is a clue, not proof that a file is a valid save. Proprietary game data may need a specific parser. This tool does not decrypt, edit, or import saves.</p>
+  <input id="researchFileInput" type="file" style="display:block;width:100%;margin:8px 0;color:var(--text)">
+  <div class="actions">
+    <button type="button" id="inspectResearchFile" class="primary">Inspect selected file</button>
+    <button type="button" id="copyFileResearch">Copy file report</button>
+    <button type="button" id="downloadFileResearch">Download JSON report</button>
+  </div>
+  <div id="fileResearchStatus" class="small" aria-live="polite" style="margin-top:10px">No file inspected yet.</div>
+  <div class="terminal"><pre id="fileResearchOutput">Choose a file and inspect it. The current limit is 10 MB, matching JoyGPT's transfer test.</pre></div>
+</section>
+
+<section class="panel" id="repoResearchPanel">
+  <h2>11. GitHub repository researcher</h2>
+  <p class="small">Paste a public GitHub repository URL. JoyGPT will read its public metadata and file tree, list .bin files (including kingdom-named files), and scan the README for save/format notes. It will not download every file.</p>
+  <label for="researchRepoUrl">GitHub repository</label>
+  <input id="researchRepoUrl" type="url" inputmode="url" placeholder="https://github.com/owner/repository" style="display:block;width:100%;margin:6px 0 10px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
+  <div class="actions">
+    <button type="button" id="scanResearchRepo" class="primary">Scan repository</button>
+    <button type="button" id="copyRepoResearch">Copy repository report</button>
+  </div>
+  <div id="repoResearchStatus" class="small" aria-live="polite" style="margin-top:10px">No repository scanned yet.</div>
+  <div id="repoBinList" class="small" style="margin-top:10px"></div>
+  <div class="terminal"><pre id="repoResearchOutput">A scan will report the repository's default branch, .bin paths and sizes, and relevant README lines. Public GitHub API rate limits or browser restrictions may block this check.</pre></div>
+</section>
+
+<section class="panel" id="urlResearchPanel">
+  <h2>12. Direct file URL diagnostics</h2>
+  <p class="small">Test what a direct file URL returns from this browser. The request asks for the first byte range where supported and cancels reading after the first response chunk. It records HTTP status, content type, range support, timing, and a short byte preview.</p>
+  <label for="researchUrl">Direct file URL (raw file URL is best)</label>
+  <input id="researchUrl" type="url" inputmode="url" placeholder="https://raw.githubusercontent.com/owner/repo/branch/path/file.bin" style="display:block;width:100%;margin:6px 0 10px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
+  <div class="actions">
+    <button type="button" id="testResearchUrl" class="primary">Test URL response</button>
+    <button type="button" id="copyUrlResearch">Copy URL report</button>
+    <button type="button" id="downloadUrlResearch">Download JSON report</button>
+  </div>
+  <div id="urlResearchStatus" class="small" aria-live="polite" style="margin-top:10px">No URL tested yet.</div>
+  <div class="terminal"><pre id="urlResearchOutput">This test may be blocked by CORS, the network, or the browser. Such a failure is not proof that the file itself is broken.</pre></div>
+  <p class="note">Nintendo error 2809-1209 is not an HTTP status that this page can inspect. Nintendo's published guidance says to try a different internet access point. This tool helps separate a reachable raw URL from browser-navigation/download behavior, but cannot directly inspect the console's error screen.</p>
+  <p><a href="https://en-americas-support.nintendo.com/app/answers/detail/a_id/49828/kw/2809-1209" target="_blank" rel="noopener noreferrer">Nintendo support: error 2809-1209 ↗</a></p>
+</section>
+
 <footer>JoyGPT research page · No device chooser is opened automatically. This page does not send USB/Bluetooth commands to the Switch.</footer>
 </main>
-<script src="./app.js?v=watch-camera-1"></script>
+<script src="./app.js?v=research-lab-1"></script>
 </body>
 </html>
