@@ -204,12 +204,12 @@ footer{font-size:.82rem;color:var(--muted);padding:10px 2px}
   <textarea id="wsTypedPayload" rows="3" style="display:block;width:100%;margin:6px 0 10px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">{"message":"hello from JoyGPT","source":"phone"}</textarea>
   <button type="button" id="sendTypedWebSocketMessage">Send typed message</button>
   <h3 style="margin:18px 0 6px">Send a file</h3>
-  <p class="small">Choose an image, audio clip, video clip, or other file up to 10 MB. Files are split into small binary packets and relayed through the Worker. This is file transfer, not a live camera/microphone stream.</p>
-  <input id="wsFileInput" type="file" accept="image/*,audio/*,video/*" style="display:block;width:100%;margin:8px 0;color:var(--text)">
+  <p class="small">Choose any file up to 10 MB, including documents, save files, archives, or media. Files are split into small binary packets and relayed through the Worker. This transfers bytes only; it does not make the Switch accept or load a save file.</p>
+  <input id="wsFileInput" type="file" style="display:block;width:100%;margin:8px 0;color:var(--text)">
   <button type="button" id="sendWebSocketFile">Send selected file</button>
   <div id="wsFileStatus" class="small" aria-live="polite" style="margin-top:8px">No file transfer yet.</div>
   <h3 style="margin:18px 0 6px">Received files</h3>
-  <div id="wsReceivedFiles" class="small">Received images, audio, video, and other files will appear here with a preview or download link.</div>
+  <div id="wsReceivedFiles" class="small">Received files will appear here with a preview when supported, or a download link.</div>
   <div id="wsTestStatus" class="small" aria-live="polite" style="margin-top:10px">Not connected.</div>
   <div id="wsCount" class="small">Messages observed: 0</div>
   <div id="wsRttSummary" class="small">No echo samples yet.</div>
