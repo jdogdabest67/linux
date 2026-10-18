@@ -1052,6 +1052,424 @@
   if ($("watchCapture")) $("watchCapture").addEventListener("click", captureWatchFrame);
   window.addEventListener("pagehide", () => stopWatchCamera(false));
 
+
+  // Research bench: inspect user-selected files locally, scan a public GitHub
+  // repository tree, and diagnose direct URL responses. None of these uploads files.
+  const MAX_RESEARCH_FILE_BYTES = 10 * 1024 * 1024;
+  let lastFileResearchReport = null;
+  let lastRepoResearchReport = null;
+  let lastUrlResearchReport = null;
+
+  function hexPreview(bytes, maxBytes = 256) {
+    const view = Array.from(bytes.subarray(0, maxBytes), b => b.toString(16).padStart(2, "0").toUpperCase());
+    const rows = [];
+    for (let i = 0; i < view.length; i += 16) {
+      const row = view.slice(i, i + 16);
+      const offset = i.toString(16).padStart(8, "0");
+      const hex = row.join(" ").padEnd(16 * 3 - 1, " ");
+      const ascii = Array.from(bytes.subarray(i, Math.min(i + 16, maxBytes)), b => b >= 32 && b <= 126 ? String.fromCharCode(b) : ".");
+      rows.push(offset + "  " + hex + "  |" + ascii.join("") + "|");
+    }
+    return rows.join("\n") || "(empty file)";
+  }
+
+  function byteString(bytes, from, to) {
+    return Array.from(bytes.subarray(from, to), b => String.fromCharCode(b)).join("");
+  }
+
+  function signatureClues(bytes) {
+    const starts = (values) => values.every((value, index) => bytes[index] === value);
+    const clues = [];
+    const signatures = [
+      { name: "PNG image", bytes: [0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a] },
+      { name: "JPEG image", bytes: [0xff,0xd8,0xff] },
+      { name: "PDF document", bytes: [0x25,0x50,0x44,0x46,0x2d] },
+      { name: "ZIP container (also used by some archives/packages)", bytes: [0x50,0x4b,0x03,0x04] },
+      { name: "Empty ZIP/end-of-central-directory marker", bytes: [0x50,0x4b,0x05,0x06] },
+      { name: "GZIP data", bytes: [0x1f,0x8b] },
+      { name: "7-Zip archive", bytes: [0x37,0x7a,0xbc,0xaf,0x27,0x1c] },
+      { name: "RAR archive", bytes: [0x52,0x61,0x72,0x21,0x1a,0x07] },
+      { name: "SQLite database", bytes: [0x53,0x51,0x4c,0x69,0x74,0x65,0x20,0x66,0x6f,0x72,0x6d,0x61,0x74,0x20,0x33] },
+      { name: "WebAssembly binary", bytes: [0x00,0x61,0x73,0x6d] },
+      { name: "ELF executable/shared object", bytes: [0x7f,0x45,0x4c,0x46] },
+      { name: "Windows PE executable (MZ header)", bytes: [0x4d,0x5a] },
+      { name: "GIF image", bytes: [0x47,0x49,0x46,0x38] },
+      { name: "RIFF container (often WAV/WEBP/AVI)", bytes: [0x52,0x49,0x46,0x46] },
+      { name: "Ogg media", bytes: [0x4f,0x67,0x67,0x53] }
+    ];
+    for (const signature of signatures) {
+      if (bytes.length >= signature.bytes.length && starts(signature.bytes)) clues.push(signature.name);
+    }
+    if (bytes.length >= 4 && byteString(bytes,0,4) === "Cr24") clues.push("Chromium extension/package signature");
+    if (bytes.length >= 4 && bytes[0] === 0x94) {
+      clues.push("Weak header clue only: byte 0x94 resembles an old-format OpenPGP secret-key packet marker; a single byte cannot confirm that format and may be a false positive.");
+    }
+    if (!clues.length) clues.push("No supported common file signature recognized at byte 0. The file may use a proprietary format, a wrapper/header, or an offset signature.");
+    return clues;
+  }
+
+  function asciiStringClues(bytes) {
+    const results = [];
+    const minLength = 5;
+    let start = -1;
+    for (let i = 0; i <= bytes.length; i++) {
+      const printable = i < bytes.length && bytes[i] >= 32 && bytes[i] <= 126;
+      if (printable && start < 0) start = i;
+      if ((!printable || i === bytes.length) && start >= 0) {
+        const length = i - start;
+        if (length >= minLength) {
+          results.push({ offset: "0x" + start.toString(16).toUpperCase().padStart(8, "0"), length, text: byteString(bytes, start, Math.min(i, start + 240)) });
+        }
+        start = -1;
+      }
+    }
+    return results;
+  }
+
+  function calculateEntropy(bytes) {
+    if (!bytes.length) return 0;
+    const freq = new Uint32Array(256);
+    for (const byte of bytes) freq[byte]++;
+    let entropy = 0;
+    for (const count of freq) {
+      if (!count) continue;
+      const p = count / bytes.length;
+      entropy -= p * Math.log2(p);
+    }
+    return entropy;
+  }
+
+  async function inspectSelectedResearchFile() {
+    const status = $("fileResearchStatus");
+    const output = $("fileResearchOutput");
+    const file = $("researchFileInput").files && $("researchFileInput").files[0];
+    if (!file) {
+      status.textContent = "Choose a file first.";
+      return;
+    }
+    if (file.size > MAX_RESEARCH_FILE_BYTES) {
+      status.textContent = "File is larger than the 10 MB inspector limit. Choose a smaller file for this first pass.";
+      return;
+    }
+    status.textContent = "Reading file locally and calculating clues…";
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      const strings = asciiStringClues(bytes);
+      const relevantPattern = /odyssey|mario|world|kingdom|savedata|save.?data|gameprogress|achievement|checkpoint|coin|shine|moon|scenario|forest|woods|metro|lake|sand|snow|seaside|luncheon|bowser|mushroom/i;
+      const relevantStrings = strings.filter(item => relevantPattern.test(item.text));
+      let sha256 = "not available in this browser context";
+      try {
+        if (crypto && crypto.subtle && typeof crypto.subtle.digest === "function") {
+          const hash = await crypto.subtle.digest("SHA-256", buffer);
+          sha256 = Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, "0")).join("");
+        }
+      } catch (error) {
+        sha256 = "Could not calculate: " + error.name + ": " + error.message;
+      }
+      const report = {
+        tool: "JoyGPT Binary File Inspector",
+        reportVersion: 1,
+        inspectedAt: new Date().toISOString(),
+        localOnly: true,
+        file: { name: file.name, sizeBytes: file.size, reportedMimeType: file.type || "(browser supplied no MIME type)", lastModified: file.lastModified ? new Date(file.lastModified).toISOString() : null },
+        sha256,
+        first32BytesHex: Array.from(bytes.subarray(0, 32), b => b.toString(16).padStart(2, "0")).join(" "),
+        commonSignatureClues: signatureClues(bytes),
+        shannonEntropyBitsPerByte: Number(calculateEntropy(bytes).toFixed(4)),
+        printableAsciiRunCount: strings.length,
+        gameRelatedStringCount: relevantStrings.length,
+        relevantStrings: relevantStrings.slice(0, 100),
+        printableStringsSample: strings.slice(0, 80),
+        hexDumpFirst256Bytes: hexPreview(bytes, 256),
+        limitations: [
+          "Signatures and readable strings are heuristics, not proof of file format or validity.",
+          "A file may contain strings from a schema/table or game resources without being a complete save file.",
+          "No file content was uploaded, modified, decrypted, or imported."
+        ]
+      };
+      lastFileResearchReport = report;
+      const lines = [
+        "FILE: " + file.name,
+        "SIZE: " + file.size + " bytes (" + (file.size / 1048576).toFixed(3) + " MiB)",
+        "BROWSER MIME TYPE: " + (file.type || "(none reported)"),
+        "LAST MODIFIED: " + (report.file.lastModified || "(not provided)"),
+        "SHA-256: " + sha256,
+        "",
+        "COMMON SIGNATURE CLUES:",
+        ...report.commonSignatureClues.map(item => "- " + item),
+        "",
+        "SHANNON ENTROPY: " + report.shannonEntropyBitsPerByte + " bits/byte (maximum 8; not a file-type verdict)",
+        "PRINTABLE ASCII RUNS: " + strings.length,
+        "GAME-RELATED STRING MATCHES: " + relevantStrings.length,
+        "MATCHING STRINGS (first 100):",
+        ...(relevantStrings.length ? relevantStrings.slice(0, 100).map(item => item.offset + " [" + item.length + " bytes] " + item.text) : ["(none)"]),
+        "",
+        "HEX / ASCII PREVIEW (first 256 bytes):",
+        report.hexDumpFirst256Bytes,
+        "",
+        "CAUTION: strings such as GameProgressData, WorldData, or Checkpoint are evidence of related names, not proof of a valid importable save. A format-specific parser and trusted source are still needed."
+      ];
+      output.textContent = lines.join("\n");
+      status.textContent = "Inspection complete. File stayed in this page; " + (crypto && crypto.subtle ? "SHA-256 was attempted." : "SHA-256 may be unavailable on this browser.");
+    } catch (error) {
+      status.textContent = "Inspection failed: " + error.name + ": " + error.message;
+      output.textContent = "The browser could not read the selected file. No upload was attempted.";
+    }
+  }
+
+  function copyResearchText(textValue, statusId, emptyMessage) {
+    const status = $(statusId);
+    if (!textValue) {
+      status.textContent = emptyMessage || "No report available yet.";
+      return;
+    }
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(textValue).then(
+        () => { status.textContent = "Report copied to clipboard."; },
+        () => { status.textContent = "Clipboard blocked. Select the report and copy it manually."; }
+      );
+    } else {
+      status.textContent = "Clipboard API unavailable. Select the report and copy it manually.";
+    }
+  }
+
+  function downloadResearchJson(report, filename, statusId) {
+    if (!report) {
+      $(statusId).textContent = "Run the test first; there is no report to download.";
+      return;
+    }
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.textContent = "Download report";
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    $(statusId).textContent = "JSON report download requested.";
+  }
+
+  $("inspectResearchFile").addEventListener("click", inspectSelectedResearchFile);
+  $("copyFileResearch").addEventListener("click", () => copyResearchText($("fileResearchOutput").textContent, "fileResearchStatus", "Inspect a file first."));
+  $("downloadFileResearch").addEventListener("click", () => downloadResearchJson(lastFileResearchReport, "joygpt-file-report.json", "fileResearchStatus"));
+
+  function parseGitHubRepoUrl(value) {
+    let url;
+    try { url = new URL(value.trim()); } catch (_) { throw new Error("Enter a full public GitHub repository URL."); }
+    if (url.hostname.toLowerCase() !== "github.com" || (url.protocol !== "https:" && url.protocol !== "http:")) {
+      throw new Error("For this scan, use a URL on github.com, not a raw-file URL or another host.");
+    }
+    const segments = url.pathname.split("/").filter(Boolean);
+    if (segments.length < 2) throw new Error("The URL needs an owner and repository name.");
+    const owner = segments[0];
+    const name = segments[1].replace(/\.git$/i, "");
+    if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(name)) throw new Error("The repository URL contains unsupported characters.");
+    return { owner, name, repoUrl: "https://github.com/" + owner + "/" + name };
+  }
+
+  async function scanResearchRepository() {
+    const status = $("repoResearchStatus");
+    const output = $("repoResearchOutput");
+    const list = $("repoBinList");
+    const value = $("researchRepoUrl").value.trim();
+    list.replaceChildren();
+    if (!value) { status.textContent = "Paste a GitHub repository URL first."; return; }
+    status.textContent = "Reading public repository metadata and file tree…";
+    output.textContent = "Scanning…";
+    try {
+      const parsed = parseGitHubRepoUrl(value);
+      const metaUrl = "https://api.github.com/repos/" + encodeURIComponent(parsed.owner) + "/" + encodeURIComponent(parsed.name);
+      const metaResponse = await fetch(metaUrl, { headers: { "Accept": "application/vnd.github+json" }, cache: "no-store" });
+      if (!metaResponse.ok) throw new Error("GitHub metadata request returned HTTP " + metaResponse.status + ". The repo may be private, missing, rate-limited, or blocked.");
+      const meta = await metaResponse.json();
+      const branch = meta.default_branch || "main";
+      const treeUrl = "https://api.github.com/repos/" + encodeURIComponent(parsed.owner) + "/" + encodeURIComponent(parsed.name) + "/git/trees/" + encodeURIComponent(branch) + "?recursive=1";
+      const treeResponse = await fetch(treeUrl, { headers: { "Accept": "application/vnd.github+json" }, cache: "no-store" });
+      if (!treeResponse.ok) throw new Error("GitHub file-tree request returned HTTP " + treeResponse.status + ".");
+      const treeData = await treeResponse.json();
+      const tree = Array.isArray(treeData.tree) ? treeData.tree : [];
+      const binFiles = tree.filter(item => item.type === "blob" && /\.bin$/i.test(item.path || ""));
+      const gameBins = binFiles.filter(item => /(wood|forest|cascade|sand|lake|metro|snow|sea|lunch|bowser|moon|mushroom|kingdom|world)/i.test(item.path));
+      let readmeLines = [];
+      let readmeStatus = "README not found or unavailable.";
+      try {
+        const readmeResponse = await fetch("https://api.github.com/repos/" + encodeURIComponent(parsed.owner) + "/" + encodeURIComponent(parsed.name) + "/readme", { headers: { "Accept": "application/vnd.github+json" }, cache: "no-store" });
+        if (readmeResponse.ok) {
+          const readme = await readmeResponse.json();
+          let decoded = "";
+          if (readme.encoding === "base64" && readme.content) {
+            const raw = atob(readme.content.replace(/\s/g, ""));
+            const bytes = Uint8Array.from(raw, ch => ch.charCodeAt(0));
+            decoded = new TextDecoder().decode(bytes);
+          } else if (typeof readme.content === "string") decoded = readme.content;
+          readmeLines = decoded.split("\n").map((line, index) => ({ line: index + 1, text: line.trim() })).filter(item => item.text && /(save.?data|odyssey|kingdom|\.bin|emulat|format|import|backup|switch|yuzu|ryujinx|parser|convert)/i.test(item.text)).slice(0, 20);
+          readmeStatus = readmeLines.length ? "Matched " + readmeLines.length + " README lines about saves/formats." : "README loaded, but no save/format keywords matched.";
+        } else readmeStatus = "README endpoint returned HTTP " + readmeResponse.status + ".";
+      } catch (error) { readmeStatus = "README scan failed: " + error.message; }
+
+      const files = binFiles.slice(0, 200).map(item => ({
+        path: item.path, sizeBytes: Number.isFinite(item.size) ? item.size : null, sha: item.sha || null,
+        githubUrl: parsed.repoUrl + "/blob/" + encodeURIComponent(branch) + "/" + item.path.split("/").map(encodeURIComponent).join("/"),
+        rawUrl: "https://raw.githubusercontent.com/" + parsed.owner + "/" + parsed.name + "/" + branch.split("/").map(encodeURIComponent).join("/") + "/" + item.path.split("/").map(encodeURIComponent).join("/")
+      }));
+      lastRepoResearchReport = {
+        tool: "JoyGPT GitHub Repository Researcher", reportVersion: 1, scannedAt: new Date().toISOString(),
+        repository: { name: meta.full_name || parsed.owner + "/" + parsed.name, url: parsed.repoUrl, description: meta.description || null, defaultBranch: branch, stars: meta.stargazers_count, archived: Boolean(meta.archived), visibility: meta.private ? "private" : "public" },
+        tree: { entryCount: tree.length, truncated: Boolean(treeData.truncated), binFileCount: binFiles.length, kingdomNameBinCount: gameBins.length, files },
+        readme: { status: readmeStatus, matchedLines: readmeLines },
+        limitations: ["The scanner lists names and metadata; it does not prove binary file contents or save compatibility.", "The scanner does not download every .bin file.", "GitHub's public API, browser CORS, rate limits, and repo size can affect results."]
+      };
+      const rows = files.map((file, index) => {
+        const row = document.createElement("div");
+        row.style.cssText = "border-top:1px solid var(--line);padding:8px 0";
+        const title = document.createElement("div");
+        title.textContent = (index + 1) + ". " + file.path + " (" + (file.sizeBytes === null ? "size not supplied" : file.sizeBytes.toLocaleString() + " bytes") + ")";
+        title.style.fontWeight = "650";
+        const github = document.createElement("a");
+        github.href = file.githubUrl; github.target = "_blank"; github.rel = "noopener noreferrer"; github.textContent = "Open on GitHub";
+        const raw = document.createElement("a");
+        raw.href = file.rawUrl; raw.target = "_blank"; raw.rel = "noopener noreferrer"; raw.textContent = "Raw file URL";
+        row.append(title, github, document.createTextNode(" · "), raw);
+        list.appendChild(row);
+      });
+      if (!files.length) {
+        const note = document.createElement("p");
+        note.textContent = "No .bin files were found in the returned tree.";
+        list.appendChild(note);
+      }
+      const lines = [
+        "REPOSITORY: " + lastRepoResearchReport.repository.name,
+        "URL: " + parsed.repoUrl,
+        "DESCRIPTION: " + (meta.description || "(none)"),
+        "DEFAULT BRANCH: " + branch,
+        "ARCHIVED: " + Boolean(meta.archived),
+        "STARS: " + (meta.stargazers_count ?? "(not supplied)"),
+        "TREE ENTRIES RETURNED: " + tree.length + (treeData.truncated ? " (TRUNCATED BY API)" : ""),
+        ".BIN FILES: " + binFiles.length + "; kingdom/world-named .bin paths: " + gameBins.length,
+        "",
+        "BINARY FILES (first 200):",
+        ...(files.length ? files.map(file => "- " + file.path + " | " + (file.sizeBytes === null ? "size unknown" : file.sizeBytes + " bytes") + " | " + file.rawUrl) : ["(none found in tree)"]),
+        "",
+        "README: " + readmeStatus,
+        ...readmeLines.map(item => "L" + item.line + ": " + item.text),
+        "",
+        "LIMIT: File names and README text cannot prove that a .bin is a valid save or that Switch 2 supports importing it."
+      ];
+      output.textContent = lines.join("\n");
+      status.textContent = "Scan finished. Found " + binFiles.length + " .bin file(s)" + (treeData.truncated ? "; GitHub reported a truncated tree." : ".") + " Open the listed paths/Raw URLs for the next test.";
+    } catch (error) {
+      lastRepoResearchReport = { tool: "JoyGPT GitHub Repository Researcher", scannedAt: new Date().toISOString(), input: value, error: error.message };
+      output.textContent = "SCAN FAILED\n" + error.name + ": " + error.message + "\n\nA failure here can mean browser CORS/network blocking, API rate limiting, a private/missing repository, or a request problem. It does not prove that the repository or file is invalid.";
+      status.textContent = "Repository scan did not complete.";
+    }
+  }
+
+  $("scanResearchRepo").addEventListener("click", scanResearchRepository);
+  $("copyRepoResearch").addEventListener("click", () => copyResearchText($("repoResearchOutput").textContent, "repoResearchStatus", "Scan a repository first."));
+
+  async function testResearchDirectUrl() {
+    const status = $("urlResearchStatus");
+    const output = $("urlResearchOutput");
+    const value = $("researchUrl").value.trim();
+    if (!value) { status.textContent = "Enter a direct file URL first."; return; }
+    let url;
+    try { url = new URL(value); } catch (_) { status.textContent = "Enter a complete URL including https://."; return; }
+    if (!["https:", "http:"].includes(url.protocol)) { status.textContent = "Only http:// and https:// URLs are supported."; return; }
+    status.textContent = "Requesting a small byte range…";
+    const started = performance.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(url.href, {
+        method: "GET",
+        headers: { "Range": "bytes=0-511" },
+        cache: "no-store",
+        mode: "cors",
+        redirect: "follow",
+        signal: controller.signal
+      });
+      const elapsedMs = Math.round(performance.now() - started);
+      let firstChunk = new Uint8Array(0);
+      let readNote = "Response body not readable.";
+      if (response.body && typeof response.body.getReader === "function") {
+        const reader = response.body.getReader();
+        try {
+          const read = await reader.read();
+          if (!read.done && read.value) firstChunk = read.value.slice(0, 4096);
+          readNote = read.done ? "Body ended before first chunk." : "Captured first response chunk only, then cancelled reading.";
+        } finally {
+          try { await reader.cancel(); } catch (_) {}
+        }
+      } else {
+        readNote = "Streaming reader unavailable; body was not read.";
+      }
+      const report = {
+        tool: "JoyGPT Direct URL Diagnostics", reportVersion: 1, testedAt: new Date().toISOString(),
+        inputUrl: url.href, finalUrl: response.url, requestMethod: "GET", requestedRange: "bytes=0-511",
+        responseType: response.type, httpStatus: response.status, statusText: response.statusText,
+        ok: response.ok, elapsedMs, contentType: response.headers.get("content-type"),
+        contentLength: response.headers.get("content-length"), contentRange: response.headers.get("content-range"),
+        acceptRanges: response.headers.get("accept-ranges"), contentDisposition: response.headers.get("content-disposition"),
+        firstChunkBytesCaptured: firstChunk.length, firstChunkHex: Array.from(firstChunk.subarray(0,128), b => b.toString(16).padStart(2,"0")).join(" "),
+        firstChunkAscii: byteString(firstChunk, 0, Math.min(firstChunk.length, 256)).replace(/[^\x20-\x7e]/g, "."),
+        readNote,
+        interpretation: response.status === 206 ? "The server honored a byte-range request." : response.status === 200 ? "HTTP 200 response. The server may have ignored the byte range; the test cancelled body reading after the first chunk." : "HTTP response received; inspect the status and content type.",
+        limitations: ["A successful fetch proves only that this page could fetch the URL; opening the link directly may behave differently.", "A CORS error does not tell the page the server's real status.", "This test does not tell us whether the Switch OS accepts the file."]
+      };
+      lastUrlResearchReport = report;
+      output.textContent = [
+        "HTTP STATUS: " + response.status + " " + response.statusText,
+        "ELAPSED: " + elapsedMs + " ms",
+        "FINAL URL: " + response.url,
+        "RESPONSE TYPE: " + response.type,
+        "CONTENT-TYPE: " + (report.contentType || "(not supplied)"),
+        "CONTENT-LENGTH: " + (report.contentLength || "(not supplied)"),
+        "CONTENT-RANGE: " + (report.contentRange || "(not supplied)"),
+        "ACCEPT-RANGES: " + (report.acceptRanges || "(not supplied)"),
+        "CONTENT-DISPOSITION: " + (report.contentDisposition || "(not supplied)"),
+        "FIRST CHUNK CAPTURED: " + firstChunk.length + " bytes",
+        "FIRST BYTES: " + (report.firstChunkHex || "(none)"),
+        "ASCII PREVIEW: " + (report.firstChunkAscii || "(none)"),
+        "READ NOTE: " + readNote,
+        "",
+        report.interpretation,
+        "Opening this URL directly may behave differently from fetching it inside this page."
+      ].join("\n");
+      status.textContent = "URL request returned HTTP " + response.status + " in " + elapsedMs + " ms.";
+    } catch (error) {
+      const elapsedMs = Math.round(performance.now() - started);
+      lastUrlResearchReport = {
+        tool: "JoyGPT Direct URL Diagnostics", reportVersion: 1, testedAt: new Date().toISOString(),
+        inputUrl: url.href, elapsedMs, errorName: error.name, errorMessage: error.message,
+        likelyCauses: error.name === "AbortError" ? ["Request exceeded the 12-second timeout or was cancelled."] : ["CORS blocked the response from JavaScript.", "The network/browser blocked the request.", "TLS, DNS, or the remote server failed."],
+        note: "When fetch rejects, browser security intentionally hides the exact network/HTTP cause. This is not proof that the file itself is corrupted."
+      };
+      output.textContent = [
+        "FETCH FAILED AFTER " + elapsedMs + " ms",
+        error.name + ": " + error.message,
+        "",
+        "Possible causes:",
+        "- CORS blocked the response from JavaScript.",
+        "- The network or browser blocked the request.",
+        "- DNS, TLS, timeout, or remote server issue.",
+        "",
+        "A fetch failure is not the same thing as a corrupt file. The browser does not expose the exact cause in many cases."
+      ].join("\n");
+      status.textContent = "URL test failed. Report the error text plus the approximate time of the test.";
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  $("testResearchUrl").addEventListener("click", testResearchDirectUrl);
+  $("copyUrlResearch").addEventListener("click", () => copyResearchText($("urlResearchOutput").textContent, "urlResearchStatus", "Test a URL first."));
+  $("downloadUrlResearch").addEventListener("click", () => downloadResearchJson(lastUrlResearchReport, "joygpt-url-report.json", "urlResearchStatus"));
+
+
   loadSavedConfig();
   showApiChecks();
 })();
