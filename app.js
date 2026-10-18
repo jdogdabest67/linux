@@ -169,7 +169,7 @@
   // Remote webpage-command experiment. This can operate this page's UI only,
   // not the Switch operating system or an in-game controller.
   let commandTimer = null;
-  let listeningSince = 0;
+  let baselineReady = false;
   const seenCommandIds = new Set();
   let demoPressCount = 0;
 
@@ -252,8 +252,16 @@
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || ("HTTP " + response.status));
       const role = getDeviceRole();
-      const incoming = (Array.isArray(data.messages) ? data.messages : [])
-        .filter(message => message.from !== role && message.at >= listeningSince && !seenCommandIds.has(message.id))
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      if (!baselineReady) {
+        // Mark old history as seen so stale commands do not replay on listener start.
+        messages.forEach(message => seenCommandIds.add(message.id));
+        baselineReady = true;
+        $("commandStatus").textContent = "Listening as " + role + " · ready for new commands.";
+        return;
+      }
+      const incoming = messages
+        .filter(message => message.from !== role && !seenCommandIds.has(message.id))
         .sort((a, b) => a.at - b.at);
       for (const message of incoming) {
         seenCommandIds.add(message.id);
@@ -268,7 +276,7 @@
 
   function startCommandListener() {
     if (commandTimer) window.clearInterval(commandTimer);
-    listeningSince = Date.now();
+    baselineReady = false;
     seenCommandIds.clear();
     commandTimer = window.setInterval(pollCommands, 1800);
     $("commandStatus").textContent = "Starting listener as " + getDeviceRole() + "…";
