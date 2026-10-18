@@ -91,6 +91,38 @@ footer{font-size:.82rem;color:var(--muted);padding:10px 2px}
   <p class="note">A message appearing on the phone proves the Switch browser sent a request that the backend stored. It does not prove the Switch operating system received a command. Do not enter private information here.</p>
 </section>
 
+
+<section class="panel">
+  <h2>4. Remote webpage commands (new experiment)</h2>
+  <p class="small">Set this page to <strong>Phone</strong> on your phone and <strong>Switch</strong> on the Switch 2. Start listening on the Switch page. Then send a command from the phone. Both pages must use the same Worker URL and session.</p>
+  <label for="deviceRole">This device is</label>
+  <select id="deviceRole" style="display:block;width:100%;margin:6px 0 12px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
+    <option value="phone">Phone (send commands)</option>
+    <option value="switch">Switch 2 (receive commands)</option>
+  </select>
+  <label for="commandText">Command</label>
+  <input id="commandText" type="text" value="SAY:HELLO SWITCH!" maxlength="120" autocomplete="off" style="display:block;width:100%;margin:6px 0 12px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
+  <div class="actions">
+    <button type="button" id="sendCommand" class="primary">Send command</button>
+    <button type="button" id="listenCommands">Start listening</button>
+    <button type="button" id="stopCommands">Stop listening</button>
+  </div>
+  <div class="actions">
+    <button type="button" data-command="SAY:HELLO SWITCH!">Say hello</button>
+    <button type="button" data-command="FLASH">Flash screen</button>
+    <button type="button" data-command="PRESS:A">Press demo A</button>
+    <button type="button" data-command="PRESS:UP">Press demo UP</button>
+  </div>
+  <div id="commandStatus" class="small" aria-live="polite" style="margin-top:10px">Command listener stopped.</div>
+  <div class="terminal" aria-live="polite"><pre id="commandOutput">No remote command received yet.</pre></div>
+  <div id="remoteStage" style="margin-top:12px;padding:18px;border:1px solid #40566b;border-radius:12px;background:#070b10;text-align:center">
+    <div class="small">REMOTE ACTION DISPLAY</div>
+    <div id="remoteBig" style="font-size:clamp(1.5rem,7vw,2.4rem);font-weight:800;overflow-wrap:anywhere;margin-top:8px">READY</div>
+    <div id="remoteButtonState" class="small" style="margin-top:8px">Demo button: idle</div>
+  </div>
+  <p class="note">These commands can change this webpage's display and trigger local demo actions only. PRESS:A does not press a Switch controller button or control a game. This experiment tests whether one browser can command the other browser in real time.</p>
+</section>
+
 <section class="panel">
   <h2>Why the two tempting routes do not solve it</h2>
   <div class="status">
