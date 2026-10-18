@@ -342,9 +342,9 @@
 
   function addSocketLog(line) {
     const log = $("wsTestOutput");
-    const existing = log.textContent && !log.textContent.startsWith("Connect") ? log.textContent.split("\\n") : [];
+    const existing = log.textContent && !log.textContent.startsWith("Connect") ? log.textContent.split("\n") : [];
     existing.push(new Date().toLocaleTimeString() + "  " + line);
-    log.textContent = existing.slice(-60).join("\\n");
+    log.textContent = existing.slice(-60).join("\n");
     socketMessageCount += 1;
     $("wsCount").textContent = "Messages observed: " + socketMessageCount;
   }
@@ -474,7 +474,7 @@
       (event.isTrusted ? " trusted" : " synthetic");
     inputEventLog.push(new Date().toLocaleTimeString() + "  " + details);
     while (inputEventLog.length > 80) inputEventLog.shift();
-    $("inputEventOutput").textContent = inputEventLog.join("\\n");
+    $("inputEventOutput").textContent = inputEventLog.join("\n");
     $("inputEventCount").textContent = "Events captured: " + inputEventLog.length;
   }
   const pageInputEventNames = ["keydown", "keyup", "click", "pointerdown", "pointerup", "gamepadconnected", "gamepaddisconnected"];
