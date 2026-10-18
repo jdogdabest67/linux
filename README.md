@@ -39,3 +39,18 @@ The central design is browser → serial adapter → Arduino configured as a Swi
 ## Next useful test
 
 Open the live page on the phone, run the capability scan, and use the input monitor only if a controller is connected to the phone. Report the API list and whether buttons/axes show up. These results can rule browser routes in or out, but will not by themselves control the Switch.
+
+
+## Signal-test backend
+
+The static GitHub Pages site cannot store messages by itself. `worker.js` is a small Cloudflare Worker API and `wrangler.jsonc` binds a Durable Object to store the last 100 test messages. It accepts only `PING` test messages and returns JSON acknowledgements.
+
+### Deploy it
+
+1. Sign in to a Cloudflare account and open Workers & Pages.
+2. Deploy the Worker using `worker.js` and `wrangler.jsonc` (the configuration requires a Durable Object named `SignalStore`). Cloudflare's [Workers documentation](https://developers.cloudflare.com/workers/static-assets/get-started/) explains dashboard and CLI deployment.
+3. Note the HTTPS `workers.dev` URL.
+4. Open the JoyGPT page on both the Switch browser and phone. Enter the same Worker URL and session code on both.
+5. On the Switch browser, press **Send PING from this browser**. On the phone, press **Check received messages**. A message shown on the phone proves the Switch browser's request reached the backend and was stored.
+
+This backend does **not** receive commands from the Switch operating system; it only receives HTTP requests made by a browser page. The API is public and intended for harmless test messages only. Do not send personal or sensitive data. The session code is a simple test filter, not strong authentication.
