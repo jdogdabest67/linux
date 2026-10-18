@@ -188,28 +188,72 @@ footer{font-size:.82rem;color:var(--muted);padding:10px 2px}
   <div class="actions">
     <button type="button" id="connectWebSocketTest" class="primary">Connect WebSocket</button>
     <button type="button" id="sendWebSocketTest">Send test marker</button>
+    <button type="button" id="runWebSocketBurst">Run 10-marker latency test</button>
     <button type="button" id="disconnectWebSocketTest">Disconnect</button>
   </div>
   <div id="wsTestStatus" class="small" aria-live="polite" style="margin-top:10px">Not connected.</div>
   <div id="wsCount" class="small">Messages observed: 0</div>
+  <div id="wsRttSummary" class="small">No echo samples yet.</div>
   <div class="terminal"><pre id="wsTestOutput">Connect both pages after the Worker update, then send a marker.</pre></div>
 </section>
 
 <section class="panel">
   <h2>8. What input events reach the webpage?</h2>
-  <p class="small">Start recording, then use the Switch controller to move the page focus and press A, B, and the D-pad. We want to know whether the browser delivers ordinary key, click, or pointer events to this webpage. It does not attempt to read hidden system input or generate controller actions.</p>
+  <p class="small">Start recording, then use the Switch controller to move page focus and press A, B, and the D-pad. The log now includes event type, key/code, trust flag, modifiers, and repeat state. Text-entry fields are skipped so typed text is not recorded.</p>
+  <label style="display:flex;align-items:center;gap:10px;margin-top:12px">
+    <input type="checkbox" id="streamInputEvents">
+    <span>Relay event summaries to the connected peer over WebSocket</span>
+  </label>
+  <p class="small">For remote collection, connect WebSocket on both devices, use role Switch on the console and Phone on your phone, then check this box on the Switch page before recording. The phone's WebSocket log should show each relayed event.</p>
   <div class="actions">
     <button type="button" id="startEventProbe" class="primary">Start input-event recorder</button>
     <button type="button" id="stopEventProbe">Stop recorder</button>
+    <button type="button" id="copyInputEvents">Copy input log</button>
+    <button type="button" id="syntheticEventProbe">Test synthetic-event boundary</button>
   </div>
   <div id="inputEventStatus" class="small" aria-live="polite" style="margin-top:10px">Recorder stopped.</div>
+  <div id="syntheticEventStatus" class="small">Synthetic-event test not run.</div>
   <div id="inputEventCount" class="small">Events captured: 0</div>
+  <div id="inputEventSummary" class="small">No input patterns yet.</div>
   <div class="terminal"><pre id="inputEventOutput">No webpage events recorded yet.</pre></div>
-  <p class="note">If pressing controller buttons only moves focus, with no events logged, that suggests the console handles those presses outside the normal webpage event stream. It would not prove what the OS or browser internals do.</p>
+  <p class="note">The synthetic-event test dispatches a fake keydown only inside this webpage. It tests browser event trust, not gameplay. If physical controller presses appear as trusted click/key events, we can map them, but those events still belong to this page.</p>
+</section>
+
+<section class="panel">
+  <h2>9. Research: possible paths into a real game</h2>
+  <p class="small">The browser tests have answered the easy part: the page can receive some controller-related events and the phone can send messages to the page. The missing step is converting a remote command into a controller input that the running game accepts.</p>
+  <div class="status">
+    <span class="dot warn"></span>
+    <div><div class="status-title">Browser-only JavaScript</div>
+      <p class="small">Not a complete route. Synthetic keyboard/click events are events inside the webpage, not hardware controller reports. The Switch page also reported WebUSB, WebHID, and Web Bluetooth unavailable, with no visible Gamepad device or Nintendo applet API.</p>
+    </div>
+  </div>
+  <div class="status">
+    <span class="dot warn"></span>
+    <div><div class="status-title">External USB controller bridge (strongest documented route)</div>
+      <p class="small">Phone/browser → Worker/WebSocket → a separate microcontroller or controller-bridge device → USB controller input to the console. PhantomHand documents an ATmega32U4 Arduino Leonardo plus a serial adapter and NintendoSwitchControlLibrary. This is documented for Switch automation; Switch 2 compatibility with that exact library/hardware is not confirmed, so it needs a safe compatibility test before we rely on it.</p>
+      <p><a href="https://github.com/noov-smash/PhantomHand" target="_blank" rel="noopener noreferrer">PhantomHand architecture ↗</a> · <a href="https://github.com/lefmarna/NintendoSwitchControlLibrary" target="_blank" rel="noopener noreferrer">Controller library ↗</a></p>
+    </div>
+  </div>
+  <div class="status">
+    <span class="dot warn"></span>
+    <div><div class="status-title">Phone as a Bluetooth HID device</div>
+      <p class="small">Android has a native BluetoothHidDevice API, but it requires a native app and Bluetooth permissions; a normal browser page cannot register the phone as a Bluetooth HID controller. It is not viable under the current browser-only/managed-phone constraints, and Nintendo-controller compatibility is unverified.</p>
+      <p><a href="https://developer.android.com/reference/android/bluetooth/BluetoothHidDevice" target="_blank" rel="noopener noreferrer">Android Bluetooth HID API docs ↗</a></p>
+    </div>
+  </div>
+  <div class="status">
+    <span class="dot warn"></span>
+    <div><div class="status-title">Linux Bluetooth controller emulation</div>
+      <p class="small">A Linux computer with a compatible Bluetooth adapter may be able to emulate a Switch controller using projects such as joycontrol, but Switch 2 support is uncertain. The old desktop's condition and Bluetooth hardware would need checking first.</p>
+      <p><a href="https://github.com/mart1nro/joycontrol" target="_blank" rel="noopener noreferrer">joycontrol project ↗</a></p>
+    </div>
+  </div>
+  <p class="note">Current blocker: none of our listed devices is known to act as a Switch-compatible controller controlled by our webpage. We can continue network and event mapping now, but real gameplay needs that final controller-emulation route.</p>
 </section>
 
 <footer>JoyGPT research page · No device chooser is opened automatically. This page does not send USB/Bluetooth commands to the Switch.</footer>
 </main>
-<script src="./app.js?v=ws-lab-1"></script>
+<script src="./app.js?v=ws-lab-2"></script>
 </body>
 </html>
