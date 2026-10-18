@@ -387,18 +387,33 @@
     try {
       const socket = new WebSocket(wsUrl);
       testSocket = socket;
+      socket.binaryType = "arraybuffer";
       socket.addEventListener("open", () => {
-        status.textContent = "WebSocket connected as " + getDeviceRole() + ". Now send a marker from the other page.";
+        status.textContent = "WebSocket connected as " + getDeviceRole() + ". Send typed messages or a file to the other connected page.";
         addSocketLog("CONNECTED; protocol=" + (socket.protocol || "(none)") + "; readyState=" + socket.readyState);
       });
       socket.addEventListener("message", (event) => {
+        if (event.data instanceof ArrayBuffer) {
+          receiveBinaryPacket(event.data);
+          return;
+        }
+        if (typeof Blob !== "undefined" && event.data instanceof Blob) {
+          event.data.arrayBuffer().then(receiveBinaryPacket).catch(error => addSocketLog("Could not read binary frame: " + error.message));
+          return;
+        }
         let data;
         try { data = JSON.parse(event.data); } catch (_) {
-          addSocketLog("Received non-JSON frame: " + String(event.data).slice(0, 160));
+          addSocketLog("Received non-JSON text frame: " + String(event.data).slice(0, 160));
           return;
         }
         if (data.type === "error") {
           addSocketLog("SERVER ERROR: " + (data.error || "unknown"));
+          return;
+        }
+        if (data.type === "message-relay") {
+          const own = data.toClientId === socketClientId;
+          addSocketLog((own ? "SERVER ECHO" : "PEER RELAY") + " [" + data.kind + "] from " +
+            data.fromRole + ": " + JSON.stringify(data.payload).slice(0, 220));
           return;
         }
         if (data.type !== "relay") {
@@ -458,6 +473,177 @@
     }
   }
 
+
+  // Typed JSON messages share the same WebSocket pipe as the latency probe.
+  function sendTypedWebSocketMessage() {
+    if (!testSocket || testSocket.readyState !== WebSocket.OPEN) {
+      $("wsTestStatus").textContent = "Connect this browser first.";
+      return;
+    }
+    const kind = $("wsTypedKind").value;
+    const raw = $("wsTypedPayload").value;
+    let payload;
+    try {
+      payload = kind === "text" ? raw : JSON.parse(raw);
+    } catch (error) {
+      $("wsTestStatus").textContent = "That payload is not valid JSON. Text mode accepts ordinary text.";
+      return;
+    }
+    const id = "MSG-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
+    const packet = { type: "message", v: 1, id, kind, sentAt: Date.now(), payload };
+    const wire = JSON.stringify(packet);
+    if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > 12000 || wire.length > 16384) {
+      $("wsTestStatus").textContent = "This message is too large. Keep typed payloads below 12 KiB.";
+      return;
+    }
+    try {
+      testSocket.send(wire);
+      addSocketLog("SENT [" + kind + "]: " + JSON.stringify(payload).slice(0, 220));
+      $("wsTestStatus").textContent = "Sent typed " + kind + " message. Check the peer page.";
+    } catch (error) {
+      $("wsTestStatus").textContent = "Send failed: " + error.name + ": " + error.message;
+    }
+  }
+
+  const binaryTransfers = new Map();
+  const receivedObjectUrls = [];
+  function receiveBinaryPacket(buffer) {
+    try {
+      if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 10 || buffer.byteLength > 262144) {
+        throw new Error("Binary frame size is invalid.");
+      }
+      const bytes = new Uint8Array(buffer);
+      if (bytes[0] !== 0x4a || bytes[1] !== 0x47 || bytes[2] !== 0x50 || bytes[3] !== 0x54) {
+        throw new Error("Unknown binary packet format.");
+      }
+      const headerLength = new DataView(buffer).getUint32(4, false);
+      if (headerLength < 2 || headerLength > 4096 || 8 + headerLength > bytes.length) {
+        throw new Error("Binary packet header is invalid.");
+      }
+      const header = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + headerLength)));
+      if (header.type !== "packet" || header.v !== 1 || typeof header.transferId !== "string" ||
+          !Number.isInteger(header.chunkIndex) || !Number.isInteger(header.chunkCount) ||
+          header.chunkCount < 1 || header.chunkCount > 1000 || header.chunkIndex < 0 ||
+          header.chunkIndex >= header.chunkCount || !Number.isInteger(header.size) ||
+          header.size < 0 || header.size > 10000000) throw new Error("Packet metadata is invalid.");
+      let transfer = binaryTransfers.get(header.transferId);
+      if (!transfer) {
+        transfer = { header, chunks: new Array(header.chunkCount), received: 0, bytes: 0 };
+        binaryTransfers.set(header.transferId, transfer);
+      }
+      if (transfer.header.chunkCount !== header.chunkCount || transfer.header.size !== header.size ||
+          transfer.header.name !== header.name || transfer.header.mimeType !== header.mimeType) {
+        binaryTransfers.delete(header.transferId);
+        throw new Error("Chunk metadata changed during transfer.");
+      }
+      if (!transfer.chunks[header.chunkIndex]) {
+        const chunk = bytes.slice(8 + headerLength);
+        transfer.chunks[header.chunkIndex] = chunk;
+        transfer.received += 1;
+        transfer.bytes += chunk.byteLength;
+      }
+      if (transfer.received !== header.chunkCount) {
+        $("wsFileStatus").textContent = "Receiving " + (header.name || "file") + ": " +
+          transfer.received + "/" + header.chunkCount + " chunks";
+        return;
+      }
+      binaryTransfers.delete(header.transferId);
+      if (transfer.bytes !== header.size) throw new Error("File length mismatch; the received file was discarded.");
+      const blob = new Blob(transfer.chunks, { type: header.mimeType || "application/octet-stream" });
+      showReceivedFile(header, blob);
+      addSocketLog("RECEIVED [" + header.kind + "] " + header.name + " (" + blob.size + " bytes)");
+      $("wsFileStatus").textContent = "Received " + header.name + " (" + blob.size + " bytes).";
+    } catch (error) {
+      addSocketLog("BINARY PACKET ERROR: " + error.message);
+      $("wsFileStatus").textContent = "Binary receive error: " + error.message;
+    }
+  }
+
+  function showReceivedFile(header, blob) {
+    const container = $("wsReceivedFiles");
+    const card = document.createElement("div");
+    card.style.cssText = "border:1px solid #40566b;border-radius:10px;padding:10px;margin-top:8px;overflow-wrap:anywhere";
+    const label = document.createElement("div");
+    label.textContent = header.name + " · " + header.kind + " · " + blob.size + " bytes";
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    receivedObjectUrls.push(url);
+    while (receivedObjectUrls.length > 10) URL.revokeObjectURL(receivedObjectUrls.shift());
+    link.href = url;
+    link.download = header.name || "joygpt-file.bin";
+    link.textContent = "Download received file";
+    link.style.display = "inline-block";
+    link.style.margin = "8px 0";
+    card.append(label, link);
+    if (header.kind === "image" && blob.size <= 3000000) {
+      const preview = document.createElement("img");
+      preview.src = url;
+      preview.alt = header.name || "Received image";
+      preview.style.cssText = "display:block;max-width:100%;max-height:280px;border-radius:6px";
+      card.append(preview);
+    } else if (header.kind === "audio" || header.kind === "video") {
+      const player = document.createElement(header.kind);
+      player.src = url;
+      player.controls = true;
+      player.style.cssText = "display:block;max-width:100%;width:100%;margin-top:6px";
+      card.append(player);
+    }
+    container.prepend(card);
+    while (container.children.length > 5) container.lastElementChild.remove();
+  }
+
+  async function sendWebSocketFile() {
+    if (!testSocket || testSocket.readyState !== WebSocket.OPEN) {
+      $("wsFileStatus").textContent = "Connect this browser first.";
+      return;
+    }
+    const file = $("wsFileInput").files && $("wsFileInput").files[0];
+    if (!file) {
+      $("wsFileStatus").textContent = "Choose a file first.";
+      return;
+    }
+    if (file.size > 10000000) {
+      $("wsFileStatus").textContent = "For this first test, files must be 10 MB or smaller.";
+      return;
+    }
+    const kind = file.type.startsWith("image/") ? "image" :
+      file.type.startsWith("audio/") ? "audio" :
+      file.type.startsWith("video/") ? "video" : "binary";
+    const transferId = "FILE-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+    const chunkSize = 180 * 1024;
+    const chunkCount = Math.max(1, Math.ceil(file.size / chunkSize));
+    $("wsFileStatus").textContent = "Sending " + file.name + " in " + chunkCount + " chunk(s)…";
+    try {
+      for (let i = 0; i < chunkCount; i += 1) {
+        while (testSocket && testSocket.readyState === WebSocket.OPEN && testSocket.bufferedAmount > 1048576) {
+          await new Promise(resolve => window.setTimeout(resolve, 25));
+        }
+        if (!testSocket || testSocket.readyState !== WebSocket.OPEN) throw new Error("WebSocket disconnected during transfer.");
+        const raw = new Uint8Array(await file.slice(i * chunkSize, Math.min(file.size, (i + 1) * chunkSize)).arrayBuffer());
+        const header = {
+          type: "packet", v: 1, id: transferId + "-" + i, transferId, kind,
+          name: file.name.slice(0, 200), mimeType: (file.type || "application/octet-stream").slice(0, 120),
+          size: file.size, chunkIndex: i, chunkCount
+        };
+        const meta = new TextEncoder().encode(JSON.stringify(header));
+        const packet = new Uint8Array(8 + meta.length + raw.length);
+        packet.set([0x4a, 0x47, 0x50, 0x54], 0);
+        new DataView(packet.buffer).setUint32(4, meta.length, false);
+        packet.set(meta, 8);
+        packet.set(raw, 8 + meta.length);
+        testSocket.send(packet.buffer);
+        if (i % 5 === 0 || i === chunkCount - 1) {
+          $("wsFileStatus").textContent = "Sending " + file.name + ": " + (i + 1) + "/" + chunkCount + " chunks";
+        }
+        await new Promise(resolve => window.setTimeout(resolve, 4));
+      }
+      addSocketLog("SENT [" + kind + "] " + file.name + " (" + file.size + " bytes, " + chunkCount + " chunks)");
+      $("wsFileStatus").textContent = "Sent " + file.name + ". The peer should reassemble it; this page also receives its server echo.";
+    } catch (error) {
+      $("wsFileStatus").textContent = "File transfer failed: " + error.message;
+    }
+  }
+
   function runWebSocketBurst() {
     const status = $("wsTestStatus");
     if (!testSocket || testSocket.readyState !== WebSocket.OPEN) {
@@ -507,6 +693,8 @@
 
   $("connectWebSocketTest").addEventListener("click", connectWebSocketTest);
   $("sendWebSocketTest").addEventListener("click", sendWebSocketProbe);
+  $("sendTypedWebSocketMessage").addEventListener("click", sendTypedWebSocketMessage);
+  $("sendWebSocketFile").addEventListener("click", sendWebSocketFile);
   $("runWebSocketBurst").addEventListener("click", runWebSocketBurst);
   $("disconnectWebSocketTest").addEventListener("click", disconnectWebSocketTest);
   window.addEventListener("pagehide", disconnectWebSocketTest);
