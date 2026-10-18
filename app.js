@@ -165,6 +165,137 @@
   $("sendSignal").addEventListener("click", sendSignal);
   $("checkSignals").addEventListener("click", checkSignals);
 
+
+  // Remote webpage-command experiment. This can operate this page's UI only,
+  // not the Switch operating system or an in-game controller.
+  let commandTimer = null;
+  let listeningSince = 0;
+  const seenCommandIds = new Set();
+  let demoPressCount = 0;
+
+  function getDeviceRole() {
+    return $("deviceRole").value;
+  }
+
+  function validCommand(value) {
+    const text = value.trim();
+    return text === "FLASH" ||
+      /^SAY:.{1,110}$/s.test(text) ||
+      /^PRESS:(A|B|X|Y|UP|DOWN|LEFT|RIGHT|START|SELECT)$/.test(text);
+  }
+
+  async function sendCommand(commandOverride) {
+    let config;
+    try { config = getSignalConfig(); } catch (error) {
+      $("commandStatus").textContent = error.message;
+      return;
+    }
+    const command = String(commandOverride || $("commandText").value).trim();
+    if (!validCommand(command)) {
+      $("commandStatus").textContent = "Use SAY:your message, FLASH, or PRESS:A/B/X/Y/UP/DOWN/LEFT/RIGHT/START/SELECT.";
+      return;
+    }
+    const id = "CMD-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 7).toUpperCase();
+    $("commandStatus").textContent = "Sending " + command + "…";
+    try {
+      const response = await fetch(config.endpoint + "/api/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: config.session, id, from: getDeviceRole(), text: command })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || ("HTTP " + response.status));
+      $("commandStatus").textContent = "Command sent: " + command + ". The other browser must be listening.";
+      $("commandOutput").textContent = JSON.stringify(data, null, 2);
+    } catch (error) {
+      $("commandStatus").textContent = "Command failed: " + error.message;
+    }
+  }
+
+  function runLocalDemoAction(command, message) {
+    $("commandOutput").textContent = "[" + new Date(message.at).toLocaleTimeString() + "] " +
+      message.from + " sent " + command;
+    if (command.startsWith("SAY:")) {
+      $("remoteBig").textContent = command.slice(4).trim();
+      $("remoteButtonState").textContent = "Received a remote SAY command.";
+      return;
+    }
+    if (command === "FLASH") {
+      const previous = document.body.style.background;
+      document.body.style.background = "#fff2a8";
+      $("remoteBig").textContent = "FLASH!";
+      window.setTimeout(() => { document.body.style.background = previous; }, 450);
+      $("remoteButtonState").textContent = "Remote flash command received.";
+      return;
+    }
+    if (command.startsWith("PRESS:")) {
+      const buttonName = command.slice(6);
+      $("remoteButtonState").textContent = "Remote PRESS:" + buttonName + " received. Activating the local webpage demo button, not a game button.";
+      // This deliberately clicks only a button belonging to this webpage.
+      $("demoTarget").click();
+      $("remoteBig").textContent = "PRESS " + buttonName;
+    }
+  }
+
+  async function pollCommands() {
+    if (!commandTimer) return;
+    let config;
+    try { config = getSignalConfig(); } catch (error) {
+      $("commandStatus").textContent = error.message;
+      return;
+    }
+    try {
+      const response = await fetch(config.endpoint + "/api/messages?session=" + encodeURIComponent(config.session), {
+        method: "GET",
+        cache: "no-store"
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || ("HTTP " + response.status));
+      const role = getDeviceRole();
+      const incoming = (Array.isArray(data.messages) ? data.messages : [])
+        .filter(message => message.from !== role && message.at >= listeningSince && !seenCommandIds.has(message.id))
+        .sort((a, b) => a.at - b.at);
+      for (const message of incoming) {
+        seenCommandIds.add(message.id);
+        if (message.text !== "PING") runLocalDemoAction(message.text, message);
+      }
+      $("commandStatus").textContent = "Listening as " + role + ". Last checked " + new Date().toLocaleTimeString() +
+        (incoming.length ? " · received " + incoming.length + " new message(s)." : " · waiting for a command…");
+    } catch (error) {
+      $("commandStatus").textContent = "Listener error: " + error.message;
+    }
+  }
+
+  function startCommandListener() {
+    if (commandTimer) window.clearInterval(commandTimer);
+    listeningSince = Date.now();
+    seenCommandIds.clear();
+    commandTimer = window.setInterval(pollCommands, 1800);
+    $("commandStatus").textContent = "Starting listener as " + getDeviceRole() + "…";
+    pollCommands();
+  }
+
+  function stopCommandListener() {
+    if (commandTimer) window.clearInterval(commandTimer);
+    commandTimer = null;
+    $("commandStatus").textContent = "Command listener stopped.";
+  }
+
+  $("sendCommand").addEventListener("click", () => sendCommand());
+  $("listenCommands").addEventListener("click", startCommandListener);
+  $("stopCommands").addEventListener("click", stopCommandListener);
+  document.querySelectorAll("[data-command]").forEach(button => {
+    button.addEventListener("click", () => {
+      $("commandText").value = button.getAttribute("data-command");
+      sendCommand(button.getAttribute("data-command"));
+    });
+  });
+  $("demoTarget").addEventListener("click", () => {
+    demoPressCount += 1;
+    $("demoTarget").textContent = "Local demo button (" + demoPressCount + ")";
+    $("remoteButtonState").textContent = "Local webpage button activated " + demoPressCount + " time(s).";
+  });
+
   $("rescan").addEventListener("click", showApiChecks);
   $("startMonitor").addEventListener("click", startMonitor);
   $("stopMonitor").addEventListener("click", stopMonitor);
