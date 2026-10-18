@@ -179,6 +179,35 @@ footer{font-size:.82rem;color:var(--muted);padding:10px 2px}
   <p class="note">These results describe what this webpage can see, not hidden console internals. An API being present does not mean it can control the Switch or launch a game.</p>
 </section>
 
+<section class="panel">
+  <h2>7. Live WebSocket link test</h2>
+  <p class="small">This opens a real, persistent connection through the JoyGPT Worker. Connect the phone and Switch pages with the same session and their correct roles, then send a marker from either one. Each sender should see a server echo with round-trip time; the other connected page should show a peer relay.</p>
+  <p class="note">This tests a live message pipe only. The Worker must be updated and redeployed in Cloudflare too. Updating GitHub Pages alone does not update the backend.</p>
+  <label for="wsTestMessage">Test marker</label>
+  <input id="wsTestMessage" type="text" value="HELLO FROM JOYGPT" maxlength="200" autocomplete="off" style="display:block;width:100%;margin:6px 0 12px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
+  <div class="actions">
+    <button type="button" id="connectWebSocketTest" class="primary">Connect WebSocket</button>
+    <button type="button" id="sendWebSocketTest">Send test marker</button>
+    <button type="button" id="disconnectWebSocketTest">Disconnect</button>
+  </div>
+  <div id="wsTestStatus" class="small" aria-live="polite" style="margin-top:10px">Not connected.</div>
+  <div id="wsCount" class="small">Messages observed: 0</div>
+  <div class="terminal"><pre id="wsTestOutput">Connect both pages after the Worker update, then send a marker.</pre></div>
+</section>
+
+<section class="panel">
+  <h2>8. What input events reach the webpage?</h2>
+  <p class="small">Start recording, then use the Switch controller to move the page focus and press A, B, and the D-pad. We want to know whether the browser delivers ordinary key, click, or pointer events to this webpage. It does not attempt to read hidden system input or generate controller actions.</p>
+  <div class="actions">
+    <button type="button" id="startEventProbe" class="primary">Start input-event recorder</button>
+    <button type="button" id="stopEventProbe">Stop recorder</button>
+  </div>
+  <div id="inputEventStatus" class="small" aria-live="polite" style="margin-top:10px">Recorder stopped.</div>
+  <div id="inputEventCount" class="small">Events captured: 0</div>
+  <div class="terminal"><pre id="inputEventOutput">No webpage events recorded yet.</pre></div>
+  <p class="note">If pressing controller buttons only moves focus, with no events logged, that suggests the console handles those presses outside the normal webpage event stream. It would not prove what the OS or browser internals do.</p>
+</section>
+
 <footer>JoyGPT research page · No device chooser is opened automatically. This page does not send USB/Bluetooth commands to the Switch.</footer>
 </main>
 <script src="./app.js?v=47985fe"></script>
