@@ -74,6 +74,23 @@ footer{font-size:.82rem;color:var(--muted);padding:10px 2px}
   <div class="terminal"><pre id="gamepadOutput">No controller data read yet.</pre></div>
 </section>
 
+
+<section class="panel">
+  <h2>3. Send a real browser-to-backend signal</h2>
+  <p class="small">This panel needs a deployed JoyGPT Worker URL first. Use the same Worker URL and session code on the Switch browser and phone.</p>
+  <label for="signalEndpoint">Backend URL</label>
+  <input id="signalEndpoint" type="url" inputmode="url" placeholder="https://your-worker.your-subdomain.workers.dev" autocomplete="url" style="display:block;width:100%;margin:6px 0 12px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
+  <label for="signalSession">Shared session code</label>
+  <input id="signalSession" type="text" value="FRIES-001" maxlength="64" autocomplete="off" style="display:block;width:100%;margin:6px 0 12px;padding:11px;border-radius:9px;border:1px solid #40566b;background:#070b10;color:var(--text);font:inherit">
+  <div class="actions">
+    <button type="button" id="sendSignal" class="primary">Send PING from this browser</button>
+    <button type="button" id="checkSignals">Check received messages</button>
+  </div>
+  <div id="signalStatus" class="small" aria-live="polite" style="margin-top:10px">Backend not configured. Deploy the Worker described in the repository README first.</div>
+  <div class="terminal"><pre id="signalOutput">No signal checked yet.</pre></div>
+  <p class="note">A message appearing on the phone proves the Switch browser sent a request that the backend stored. It does not prove the Switch operating system received a command. Do not enter private information here.</p>
+</section>
+
 <section class="panel">
   <h2>Why the two tempting routes do not solve it</h2>
   <div class="status">
