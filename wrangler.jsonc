@@ -1,0 +1,14 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "joygpt-signal-bridge",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-18",
+  "durable_objects": {
+    "bindings": [
+      { "name": "SIGNAL_STORE", "class_name": "SignalStore" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SignalStore"] }
+  ]
+}
