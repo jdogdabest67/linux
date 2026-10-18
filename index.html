@@ -1,228 +1,112 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#10151c">
-<title>🌙 Joy-Con Link Lab · JoyGPT</title>
+<meta name="description" content="A focused JoyGPT experiment for finding a real path from ChatGPT to Nintendo Switch controls.">
+<title>JoyGPT · Controller Link Lab</title>
 <style>
-:root{color-scheme:dark;--bg:#10151c;--panel:#18212b;--line:#2b3947;--text:#e8f0f7;--muted:#a9bac9;--green:#8bf0b0;--amber:#ffd27a}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px system-ui,-apple-system,Segoe UI,sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
-main{max-width:850px;margin:auto;padding:18px 0 40px}h1{font-size:1.65rem;margin:.3rem 0}.sub{color:var(--muted);line-height:1.45}.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin:14px 0}.tag{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:4px 9px;color:var(--green);font-size:.82rem}.actions{display:flex;flex-wrap:wrap;gap:9px}button,a.btn{background:#263848;color:var(--text);border:1px solid #40566b;border-radius:11px;padding:12px 14px;font:inherit;text-decoration:none;display:inline-block}button:active{transform:scale(.98)}.term{background:#070b10;border:1px solid #34424f;border-radius:12px;padding:12px;font:14px/1.5 ui-monospace,monospace;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0;color:#d3e1ed}.muted{color:var(--muted);font-size:.92rem}.status{padding:9px 0;border-bottom:1px solid var(--line)}.status:last-child{border:0}.good{color:var(--green)}.warn{color:var(--amber)}code{overflow-wrap:anywhere}.codec-key[aria-pressed="true"]{background:#28553e;border-color:#8bf0b0;color:#fff}
-</style></head>
-<body><main>
-<span class="tag">JOYGPT · HARDWARE TEST</span>
-<h1>🌙 🎮 Joy-Con Link Lab</h1>
-<p class="sub">Checks what this phone's browser can actually see, then opens the WebUSB/WebHID device chooser when supported. The goal is to investigate a possible ChatGPT → Joy-Con → Switch control path, without pretending a connection worked when it didn't.</p>
-<section class="panel"><h2>🔗 External tool: PhantomHand</h2><p><a href="https://phantom-hand.web.app/projects/sandbox" target="_blank" rel="noopener noreferrer">Open PhantomHand Sandbox ↗</a></p><p class="muted">A browser-based Switch macro tool. Its documented setup requires an Arduino Leonardo plus a USB or Bluetooth serial bridge, and its guide targets desktop Chrome. This shortcut is for research; it will not control the Switch by itself from this phone.</p><p class="muted">Project details: <a href="https://github.com/noov-smash/PhantomHand" target="_blank" rel="noopener noreferrer">PhantomHand on GitHub</a>.</p></section>
-<section class="panel"><h2>1. Browser API scan</h2><div id="checks" class="muted">Scanning…</div><div class="actions" style="margin-top:12px"><button id="refresh">Rescan APIs</button><button id="gamepad">Check gamepads</button></div><p class="muted">A Joy-Con paired to the Switch is normally communicating with the Switch, not this phone. A browser can only detect devices exposed to it by Android and the browser.</p></section>
-<section class="panel"><h2>2. Live Gamepad API monitor</h2><p>Connect or pair a controller to the phone, keep this page visible, then press a button or move a stick. This reads controller input for this webpage only.</p><div class="term"><pre id="padout">Waiting for controller input…</pre></div><p class="muted">Important: this can read a controller that Android/browser exposes to the page. It cannot read the Joy-Con while it is connected only to the Switch, and it cannot forward button presses into the Switch.</p></section><section class="panel"><h2>3. Can one Joy-Con talk to both phone and Switch?</h2>
-<p><strong>New experiment:</strong> investigate whether a Joy-Con can keep controlling the Switch while also sending its button presses to this phone, so ChatGPT can observe the inputs and help play.</p>
-<div class="status"><strong>Current reality:</strong> a Joy-Con normally pairs to one host connection at a time. The Switch does not provide a standard browser interface for sharing its live controller input with a phone.</div>
-<div class="status"><strong>Test A · Phone sees the Joy-Con:</strong> open the HID picker below and check whether Android/Chrome exposes the controller. If the Joy-Con is already connected to the Switch, it may not appear here.</div>
-<div class="status"><strong>Test B · Both at once:</strong> if the phone can see the Joy-Con, check whether the Switch still responds. Do not assume it works until both are observed responding at the same time.</div>
-<div class="status"><strong>If direct sharing fails:</strong> the likely next route is a separate controller bridge or a device that can relay inputs, or a human-in-the-loop test where ChatGPT chooses a move from a screenshot and you press it. This page alone cannot create that bridge.</div>
-<p class="muted">Goal: find out what is genuinely possible with the hardware we have, not label a browser test as a working connection when it isn't.</p></section>
-<section class="panel"><h2>4. Search for a USB device</h2><p>Opens the real WebUSB chooser. It searches devices the browser is allowed to offer, not every device on the console's USB bus.</p><div class="actions"><button id="usb">Open WebUSB picker</button></div><div class="term" style="margin-top:12px"><pre id="usbout">Waiting for test…</pre></div></section>
-<section class="panel"><h2>5. Safe USB descriptor inspection</h2><p>Shows details the browser already exposes about permitted USB devices. It does not open the controller, claim interfaces, reset it, or send USB data.</p><div class="actions"><button id="inspectUsb">Inspect permitted devices</button><button id="testInterface">Test interface 1 access (no data)</button></div><div class="term" style="margin-top:12px"><pre id="inspectUsbOut">Ready. No device opened and no data sent.</pre></div></section>
-<section class="panel"><h2>6. Test HID access to the controller</h2><p>WebHID is separate from WebUSB. First you can open its chooser; the targeted test checks whether the browser can open the controller HID device and inspect its report collections, without reading or writing reports.</p><div class="actions"><button id="hid">Open WebHID picker</button><button id="testHid">Test controller HID access (no data)</button></div><div class="term" style="margin-top:12px"><pre id="hidout">Waiting for test…</pre></div></section>
-<section class="panel"><h2>7. Read the + button over WebUSB</h2>
-<p>This test uses the Switch 2 Pro Controller's USB interface, not the Gamepad API. Select the controller, then press its physical + button when prompted. The test sends the documented USB initialization/report-selection commands, then checks incoming USB reports.</p>
-<div class="actions"><button id="plusSignal">Test + button over WebUSB</button></div>
-<div class="term" style="margin-top:12px"><pre id="plusout">Ready. No USB test started.</pre></div>
-<p class="muted">This can only detect a + press if the browser can claim the controller's HID interface and the controller streams reports over USB. It does not synthesize a + press or inject controls into the Switch. USB initialization may change the controller's USB reporting state; the test closes the device afterward.</p></section>
-<section class="panel">
-<h2>8. C → WebAssembly report encoder</h2>
-<p>This is the compiled-language experiment: a tiny C module, compiled to WebAssembly, runs inside this page. Tap the pretend buttons and move the axes to make a six-byte JoyGPT demo packet.</p>
-<div class="status" id="wasmStatus"><span class="warn">Loading:</span> compiled C module…</div>
-<div class="actions" id="codecKeys" style="margin:12px 0">
-<button type="button" class="codec-key" data-mask="1" aria-pressed="false">A</button>
-<button type="button" class="codec-key" data-mask="2" aria-pressed="false">B</button>
-<button type="button" class="codec-key" data-mask="4" aria-pressed="false">X</button>
-<button type="button" class="codec-key" data-mask="8" aria-pressed="false">Y</button>
-<button type="button" class="codec-key" data-mask="16" aria-pressed="false">L</button>
-<button type="button" class="codec-key" data-mask="32" aria-pressed="false">R</button>
-<button type="button" class="codec-key" data-mask="64" aria-pressed="false">+</button>
-<button type="button" class="codec-key" data-mask="128" aria-pressed="false">−</button>
-<button type="button" id="clearCodec">Clear buttons</button>
-</div>
-<div style="display:grid;grid-template-columns:1fr;gap:12px">
-<label for="axisX">Pretend stick X: <strong id="axisXValue">128</strong>
-<input id="axisX" type="range" min="0" max="255" value="128" style="width:100%;accent-color:#8bf0b0"></label>
-<label for="axisY">Pretend stick Y: <strong id="axisYValue">128</strong>
-<input id="axisY" type="range" min="0" max="255" value="128" style="width:100%;accent-color:#8bf0b0"></label>
-</div>
-<div class="term" style="margin-top:12px"><pre id="wasmOutput">Waiting for compiled module…</pre></div>
-<p class="muted">Important: this is a real C-to-WebAssembly test, but the packet is JoyGPT's own invented demo format, not Nintendo's protocol. The buttons are simulated. This test does not access USB/Bluetooth or send any input to the Switch. Source: <a href="./joygpt-codec.c">C code</a> · <a href="./joygpt-codec.js">WebAssembly loader</a>.</p>
-</section>
-<section class="panel">
-<h2>9. PhantomHand serial packet lab</h2>
-<p>This reproduces the command framing found in PhantomHand's source code. It lets us encode and decode the same four-byte logical frame before any hardware connection exists. <strong>No USB/Bluetooth access and no commands are sent.</strong></p>
-<p class="muted">The frame is ASCII <code>S</code> (start), a two-byte payload (command ID + value), then ASCII <code>E</code> (end). PhantomHand's browser sends those as three USB transfers to an FT232 serial adapter.</p>
-<label for="phCommandId">Command ID</label>
-<select id="phCommandId" style="width:100%;margin:6px 0 12px;padding:12px;background:#10151c;color:var(--text);border:1px solid var(--line);border-radius:10px">
-<option value="0">0 · B</option><option value="1" selected>1 · A</option><option value="2">2 · Y</option><option value="3">3 · X</option>
-<option value="4">4 · L</option><option value="5">5 · R</option><option value="6">6 · ZL</option><option value="7">7 · ZR</option>
-<option value="8">8 · Minus</option><option value="9">9 · Plus</option><option value="10">10 · Left-stick click</option><option value="11">11 · Right-stick click</option>
-<option value="12">12 · D-pad up</option><option value="13">13 · D-pad down</option><option value="14">14 · D-pad left</option><option value="15">15 · D-pad right</option>
-<option value="16">16 · Home</option><option value="17">17 · Capture</option><option value="18">18 · Left stick X</option><option value="19">19 · Left stick Y</option><option value="20">20 · Right stick X</option><option value="21">21 · Right stick Y</option>
-</select>
-<label for="phCommandValue">Value (0–255)</label>
-<input id="phCommandValue" type="number" min="0" max="255" step="1" value="1" style="width:100%;margin:6px 0 12px;padding:12px;background:#10151c;color:var(--text);border:1px solid var(--line);border-radius:10px">
-<div class="actions" style="margin-bottom:12px">
-<button type="button" data-ph-preset="1,1">A press</button>
-<button type="button" data-ph-preset="1,0">A release</button>
-<button type="button" data-ph-preset="18,128">Left stick center</button>
-<button type="button" data-ph-preset="18,69">Test value 69</button>
-<button type="button" data-ph-preset="18,83">Test value 83</button>
-</div>
-<div class="term"><pre id="phPacketOutput">Creating frame…</pre></div>
-<p class="muted">Known source-code concern: the Arduino parser treats every ASCII S and E byte as a delimiter, even if one appears inside a payload. The values 69 (0x45, ASCII E) and 83 (0x53, ASCII S) therefore collide with frame markers for stick commands.</p>
-<hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
-<h3>Decode a frame</h3>
-<p>Paste four hex bytes separated by spaces, such as <code>53 01 01 45</code>. This decoder validates the framing and explains the command.</p>
-<label for="phDecodeInput">Hex bytes</label>
-<input id="phDecodeInput" value="53 01 01 45" autocomplete="off" spellcheck="false" style="width:100%;margin:6px 0 12px;padding:12px;background:#10151c;color:var(--text);border:1px solid var(--line);border-radius:10px">
-<div class="actions" style="margin-bottom:12px"><button type="button" id="phDecodeExample">Load A-press example</button></div>
-<div class="term"><pre id="phDecodeOutput">Decoding…</pre></div>
-<p class="muted">This lab mirrors the public PhantomHand source's frame format. It's a learning/test tool only, not a Nintendo protocol implementation, not a physical USB serial port, and not a controller connection.</p>
-</section>
-<section class="panel"><h2>10. What the result means</h2><div class="status"><span class="good">Detected:</span> only means the browser reports an API or a device in its chooser.</div><div class="status"><span class="warn">Not detected:</span> does not mean the Joy-Con is broken. It may be connected only to the Switch, or Android may not expose it to this browser.</div><div class="status">Even if the phone sees a Joy-Con, this page cannot automatically make the same Joy-Con send inputs to both the phone and Switch. We need an actual supported connection/bridge for that, and this test does not bypass Nintendo's controller pairing.</div></section>
-<p class="muted">Privacy and safety: chooser actions require your tap. The interface and HID access tests may open a selected device, but they do not send controller commands or read input reports. The HID test only lists report-collection metadata and then closes the device.</p>
-</main><script src="./joygpt-codec.js"></script><script src="./phantomhand-packet.js"></script>
-<script>
-const $=id=>document.getElementById(id);
-function scan(){const rows=[
-['Secure HTTPS context',isSecureContext?'Yes':'No'],
-['WebUSB',('usb'in navigator)?'Available':'Unavailable'],
-['WebHID',('hid'in navigator)?'Available':'Unavailable'],
-['Web Serial',('serial'in navigator)?'Available':'Unavailable'],
-['Gamepad API',('getGamepads'in navigator)?'Available':'Unavailable'],
-['Web Bluetooth',('bluetooth'in navigator)?'Available':'Unavailable'],
-['USB devices already permitted','Checking…']
-];$('checks').innerHTML=rows.map(([k,v])=>'<div class="status"><strong>'+k+':</strong> '+v+'</div>').join('');
-if('usb'in navigator && navigator.usb.getDevices){navigator.usb.getDevices().then(ds=>{const el=[...$('checks').children].find(x=>x.textContent.startsWith('USB devices already permitted:'));if(el)el.innerHTML='<strong>USB devices already permitted:</strong> '+ds.length;}).catch(()=>{});}
-}
-$('refresh').onclick=scan;
-$('plusSignal').onclick=async()=>{
- const out=$('plusout');
- if(!navigator.usb||!navigator.usb.requestDevice){out.textContent='WebUSB is unavailable in this browser/page context. No USB test started.';return;}
- let d=null,opened=false,claimedVendor=false,claimedHid=false;
- const timeout=(promise,ms,label)=>Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error(label+' timed out after '+ms+' ms')),ms))]);
- const sendCommand=async(subcommand,payload)=>{
-  const data=new Uint8Array(8+payload.length);
-  data.set([0x03,0x91,0x00,subcommand,0x00,payload.length,0x00,0x00],0);
-  data.set(payload,8);
-  const result=await d.transferOut(2,data);
-  if(result.status!=='ok')throw new Error('USB command '+subcommand.toString(16)+' transfer status: '+result.status);
- };
- try{
-  d=await navigator.usb.requestDevice({filters:[{vendorId:0x057e,productId:0x2069}]});
-  out.textContent='Selected '+(d.productName||'controller')+'. Opening WebUSB…';
-  await d.open();opened=true;
-  await d.claimInterface(1);claimedVendor=true;
-  out.textContent='Claimed vendor interface 1. Initializing USB reports…';
-  // Community-documented Switch 2 Pro Controller USB initialization and report selection.
-  await sendCommand(0x0d,[0x01,0x00,0x31,0x7e,0xc6,0xeb,0xf1,0x48]);
-  await sendCommand(0x0a,[0x09,0x00,0x00,0x00]);
-  await d.releaseInterface(1);claimedVendor=false;
-  await d.claimInterface(0);claimedHid=true;
-  out.textContent='USB reporting initialized. Press and release the controller’s physical + button now. Listening for up to 4 seconds…';
-  const deadline=Date.now()+4000;
-  let reports=0,lastReport='none';
-  while(Date.now()<deadline){
-   const remaining=Math.max(1,deadline-Date.now());
-   let result;
-   try{result=await timeout(d.transferIn(1,64),remaining,'Waiting for USB input report');}
-   catch(readError){if(Date.now()>=deadline)break;throw readError;}
-   if(result.status!=='ok'||!result.data)continue;
-   const bytes=new Uint8Array(result.data.buffer,result.data.byteOffset,result.data.byteLength);
-   reports++;
-   lastReport=[...bytes].slice(0,12).map(x=>x.toString(16).padStart(2,'0')).join(' ');
-   // Report 0x09: report ID, counter, power, then the three button bytes.
-   if(bytes.length>=4&&bytes[0]===0x09&&(bytes[3]&0x40)){
-    out.textContent='SUCCESS: + button detected in a USB input report!\\nReports read: '+reports+'\\nSample: '+lastReport+'\\nThe page read the physical button state; it did not press + or send input to the Switch.';
-    return;
-   }
-  }
-  out.textContent='USB connection opened and report mode selected, but no + press was confirmed in the listening window.\\nReports received: '+reports+'\\nLast report bytes: '+lastReport+'\\nIf reports were 0, this browser may not be able to read interface 0, or the controller may not be streaming over USB.';
- }catch(e){
-  out.textContent='WebUSB + button test failed: '+e.name+': '+e.message+'\\nNo + press was sent to the Switch. Cleanup will be attempted.';
- }finally{
-  if(d){
-   try{if(claimedHid)await d.releaseInterface(0);}catch(e){}
-   try{if(claimedVendor)await d.releaseInterface(1);}catch(e){}
-   try{if(opened)await d.close();}catch(e){}
-  }
-  if(!out.textContent.includes('SUCCESS: + button detected'))out.textContent+='\\nCleanup attempted: claimed interfaces released and USB device closed.';
- }
-};
-$('gamepad').onclick=()=>{if(!navigator.getGamepads){$('checks').insertAdjacentHTML('beforeend','<div class="status">Gamepads: API unavailable</div>');return}const pads=[...navigator.getGamepads()].filter(Boolean);$('checks').insertAdjacentHTML('beforeend','<div class="status"><strong>Gamepads currently visible:</strong> '+(pads.length?pads.map(p=>p.id+' (index '+p.index+')').join('; '):'none')+'</div>');renderPads();};
-function renderPads(){
- if(!navigator.getGamepads){$('padout').textContent='Gamepad API unavailable.';return}
- const pads=[...navigator.getGamepads()].filter(Boolean);
- if(!pads.length){$('padout').textContent='No gamepads visible yet. With this page focused, press a button or move a stick on a controller paired to the phone.';return}
- $('padout').textContent=pads.map(p=>{
-  const buttons=[...p.buttons].map((b,i)=>'B'+i+': '+(b.pressed?'PRESSED':'released')+' ('+Number(b.value).toFixed(2)+')');
-  const axes=[...p.axes].map((v,i)=>'Axis '+i+': '+Number(v).toFixed(2));
-  return 'Controller '+p.index+': '+p.id+'\nMapping: '+(p.mapping||'unknown')+' | '+p.buttons.length+' buttons | '+p.axes.length+' axes\n'+buttons.join(' · ')+'\n'+axes.join(' · ');
- }).join('\n\n');
-}
-window.addEventListener('gamepadconnected',e=>{$('padout').textContent='Connected: '+e.gamepad.id+'\nReading live input…';});
-window.addEventListener('gamepaddisconnected',e=>{$('padout').textContent='Disconnected: '+e.gamepad.id+'\nWaiting for controller…';});
-function gamepadLoop(){renderPads();requestAnimationFrame(gamepadLoop)}
-requestAnimationFrame(gamepadLoop);
-$('usb').onclick=async()=>{if(!('usb'in navigator)){ $('usbout').textContent='WebUSB is not available in this browser/page context.';return;}try{const d=await navigator.usb.requestDevice({filters:[]});$('usbout').textContent='Chooser selected: '+(d.productName||'unnamed USB device')+'\nVendor ID: 0x'+(d.vendorId||0).toString(16)+'\nProduct ID: 0x'+(d.productId||0).toString(16)+'\nNo interface opened; no data sent.';}catch(e){$('usbout').textContent=e.name==='NotFoundError'?'Picker closed or no device selected.':e.name+': '+e.message;}};
-$('inspectUsb').onclick=async()=>{const out=$('inspectUsbOut');if(!navigator.usb||!navigator.usb.getDevices){out.textContent='WebUSB getDevices() unavailable.';return;}try{const ds=await navigator.usb.getDevices();if(!ds.length){out.textContent='No already-permitted USB devices found. No connection was opened or changed.';return;}out.textContent=ds.map((d,n)=>{const lines=['Device '+(n+1)+': '+(d.productName||'unnamed USB device'),'Manufacturer: '+(d.manufacturerName||'not provided'),'Vendor ID: 0x'+d.vendorId.toString(16),'Product ID: 0x'+d.productId.toString(16),'Opened by this page: '+d.opened];try{const cs=d.configurations||[];lines.push('Configurations: '+cs.length);for(const c of cs){lines.push('Configuration '+c.configurationValue+': '+c.interfaces.length+' interface(s)');for(const i of c.interfaces){lines.push(' Interface '+i.interfaceNumber);for(const a of i.alternates||[]){lines.push('  Alternate '+a.alternateSetting+', class '+a.interfaceClass+', endpoints '+a.endpoints.length);for(const e of a.endpoints||[])lines.push('   Endpoint '+e.endpointNumber+', '+e.direction+', '+e.type+', packet '+e.packetSize);}}}}catch(e){lines.push('Extra descriptors unavailable while device is closed: '+e.message);}return lines.join('\\n');}).join('\\n\\n');}catch(e){out.textContent=e.name+': '+e.message;}};
-$('testInterface').onclick=async()=>{const out=$('inspectUsbOut');if(!navigator.usb||!navigator.usb.requestDevice){out.textContent='WebUSB chooser unavailable. No connection changed.';return;}let d=null,opened=false,claimed=false;try{d=await navigator.usb.requestDevice({filters:[{vendorId:0x057e,productId:0x2069}]});await d.open();opened=true;await d.claimInterface(1);claimed=true;out.textContent='SUCCESS: browser opened the selected controller and claimed vendor-specific interface 1 without sending any USB data.\\nNo endpoints were read or written. Releasing interface and closing device…';}catch(e){out.textContent='Interface 1 access test failed: '+e.name+': '+e.message+'\\nNo USB data was sent. Cleanup will be attempted.';}finally{if(d){try{if(claimed)await d.releaseInterface(1);}catch(e){}try{if(opened)await d.close();}catch(e){}}out.textContent+='\\nCleanup complete: interface released if claimed; device closed if opened.';}};
-$('hid').onclick=async()=>{if(!('hid'in navigator)){ $('hidout').textContent='WebHID is not available in this browser/page context.';return;}try{const ds=await navigator.hid.requestDevice({filters:[]});$('hidout').textContent=ds.length?'Chooser selected:\n'+ds.map(d=>(d.productName||'unnamed HID device')+' (vendor 0x'+d.vendorId.toString(16)+', product 0x'+d.productId.toString(16)+')').join('\n')+'\nNo device opened; no data sent.':'No device selected.';}catch(e){$('hidout').textContent=e.name==='NotFoundError'?'Picker closed or no device selected.':e.name+': '+e.message;}};
-$('testHid').onclick=async()=>{const out=$('hidout');if(!navigator.hid||!navigator.hid.requestDevice){out.textContent='WebHID chooser unavailable in this browser/page context. No connection changed.';return;}let d=null,opened=false;try{const ds=await navigator.hid.requestDevice({filters:[{vendorId:0x057e,productId:0x2069}]});if(!ds.length){out.textContent='No controller selected. No connection changed.';return;}d=ds[0];await d.open();opened=true;const lines=['SUCCESS: WebHID opened '+(d.productName||'the selected controller')+'.','Vendor ID: 0x'+d.vendorId.toString(16)+' | Product ID: 0x'+d.productId.toString(16),'Collections exposed: '+d.collections.length];d.collections.forEach((c,i)=>{lines.push('Collection '+(i+1)+': usage page 0x'+Number(c.usagePage||0).toString(16)+', usage 0x'+Number(c.usage||0).toString(16)+', input reports '+(c.inputReports||[]).length+', output reports '+(c.outputReports||[]).length+', feature reports '+(c.featureReports||[]).length);});lines.push('No input reports read and no reports written. Closing device…');out.textContent=lines.join('\n');}catch(e){out.textContent='HID access test failed: '+e.name+': '+e.message+'\nNo HID reports were read or written.';}finally{if(d&&opened){try{await d.close();out.textContent+='\nCleanup complete: HID device closed.';}catch(e){out.textContent+='\nCould not close HID device cleanly: '+e.message;}}}};
+:root{color-scheme:dark;--bg:#10151c;--panel:#18212b;--line:#2b3947;--text:#e8f0f7;--muted:#a9bac9;--green:#8bf0b0;--amber:#ffd27a;--blue:#91c8ff}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at top,#192939 0,#10151c 48%);color:var(--text);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
+main{max-width:760px;margin:auto;padding:26px 0 44px}
+h1{font-size:clamp(1.8rem,6vw,2.6rem);line-height:1.08;letter-spacing:-.035em;margin:.45rem 0 .7rem}
+h2{font-size:1.15rem;line-height:1.25;margin:0 0 .7rem}
+h3{font-size:1rem;margin:0 0 .35rem}
+p{margin:.5rem 0 0}
+a{color:var(--blue);text-underline-offset:3px}
+.sub,.muted{color:var(--muted)}
+.sub{max-width:640px}
+.eyebrow{display:inline-block;color:var(--green);font-size:.78rem;font-weight:750;letter-spacing:.09em}
+.panel{background:rgba(24,33,43,.94);border:1px solid var(--line);border-radius:16px;padding:17px;margin:14px 0}
+.lead{font-size:1.02rem}
+.note{border-left:3px solid var(--amber);padding:4px 0 4px 12px;color:var(--muted)}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:3px 9px;font-size:.8rem;color:var(--muted)}
+.grid{display:grid;grid-template-columns:1fr;gap:8px}
+@media(min-width:560px){.grid{grid-template-columns:1fr 1fr}}
+.status{display:flex;align-items:flex-start;gap:10px;border-top:1px solid var(--line);padding:10px 0}
+.status:first-child{border-top:0}
+.dot{width:9px;height:9px;flex:0 0 9px;border-radius:50%;margin-top:.45rem;background:var(--muted)}
+.dot.good{background:var(--green)}.dot.warn{background:var(--amber)}
+.status-title{font-weight:700}.small{font-size:.9rem;color:var(--muted)}
+button{background:#263848;color:var(--text);border:1px solid #40566b;border-radius:11px;padding:11px 14px;font:inherit;font-weight:650;cursor:pointer}
+button:active{transform:scale(.985)}
+button.primary{background:#28553e;border-color:#578967}
+button:focus-visible,a:focus-visible{outline:2px solid var(--green);outline-offset:3px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.terminal{background:#070b10;border:1px solid #34424f;border-radius:12px;padding:12px;margin-top:12px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;font:13px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace}
+hr{border:0;border-top:1px solid var(--line);margin:16px 0}
+footer{font-size:.82rem;color:var(--muted);padding:10px 2px}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <span class="eyebrow">JOYGPT · REAL-HARDWARE RESEARCH</span>
+  <h1>🎮 Controller Link Lab</h1>
+  <p class="sub lead">The mission: let ChatGPT help play a real Switch game, starting with Cappy in Super Mario Odyssey. This page now contains only tests that can tell us something useful with the gear currently available.</p>
+</header>
 
-const demoButtonNames={1:"A",2:"B",4:"X",8:"Y",16:"L",32:"R",64:"+",128:"−"};
-let joygptCodec=null;
-let demoButtonMask=0;
-function updateCodecDemo(){
- const x=Number($("axisX").value), y=Number($("axisY").value);
- $("axisXValue").textContent=String(x); $("axisYValue").textContent=String(y);
- if(!joygptCodec){$("wasmOutput").textContent="The compiled module is not ready yet.";return;}
- try{
-  const report=joygptCodec.encode(demoButtonMask,x,y);
-  const hex=report.map(v=>v.toString(16).padStart(2,"0")).join(" ");
-  const active=Object.entries(demoButtonNames).filter(([bit])=>(demoButtonMask & Number(bit))!==0).map(([,name])=>name);
-  $("wasmOutput").textContent="C module version: "+joygptCodec.version+
-   "\nDemo packet (hex): "+hex+
-   "\nButton mask: 0x"+demoButtonMask.toString(16).padStart(4,"0")+
-   "\nPretend stick: X="+x+", Y="+y+
-   "\nPressed in simulation: "+(active.length?active.join(", "):"none")+
-   "\n\nThese are encoded demo bytes only. No controller or console was contacted.";
- }catch(e){$("wasmOutput").textContent="Encoding failed: "+e.name+": "+e.message;}
-}
-document.querySelectorAll(".codec-key").forEach(button=>{
- button.addEventListener("click",()=>{
-  const bit=Number(button.dataset.mask);
-  demoButtonMask ^= bit;
-  button.setAttribute("aria-pressed",String((demoButtonMask & bit)!==0));
-  updateCodecDemo();
- });
-});
-$("clearCodec").addEventListener("click",()=>{
- demoButtonMask=0;
- document.querySelectorAll(".codec-key").forEach(button=>button.setAttribute("aria-pressed","false"));
- updateCodecDemo();
-});
-$("axisX").addEventListener("input",updateCodecDemo);
-$("axisY").addEventListener("input",updateCodecDemo);
-if(typeof window.loadJoyGPTCodec==="function"){
- window.loadJoyGPTCodec().then(codec=>{
-  joygptCodec=codec;
-  $("wasmStatus").innerHTML='<span class="good">Loaded:</span> C module compiled to WebAssembly and running in this browser.';
-  updateCodecDemo();
- }).catch(error=>{
-  $("wasmStatus").innerHTML='<span class="warn">Unavailable:</span> '+error.name+': '+error.message;
-  $("wasmOutput").textContent="The browser could not load the compiled module.";
- });
-}else{
- $("wasmStatus").innerHTML='<span class="warn">Loader missing:</span> joygpt-codec.js did not load.';
-}
+<section class="panel">
+  <h2>Current reality check</h2>
+  <p><strong>We have not connected ChatGPT to the Switch.</strong> A web page can read input from a controller that the phone exposes to it, but that does not make the phone a Switch-compatible controller or forward commands into the console.</p>
+  <p class="note">The previous USB initialization test, pretend C encoder, and PhantomHand packet simulator have been removed from the page. They did not create a working control path, and probing the Pro Controller could interrupt its connection.</p>
+</section>
 
-scan();
-</script></body></html>
+<section class="panel">
+  <h2>1. Check what this browser exposes</h2>
+  <p class="small">These are capability checks, not proof that a specific controller can be connected. Some APIs exist only on certain browsers and secure pages.</p>
+  <div id="apiChecks" class="terminal" aria-live="polite"><pre>Checking browser capabilities…</pre></div>
+  <div class="actions"><button type="button" id="rescan" class="primary">Scan again</button></div>
+</section>
+
+<section class="panel">
+  <h2>2. Can the phone read a controller?</h2>
+  <p class="small">Start the monitor, then press a button on a controller that is connected to the phone. If Android/Chrome exposes it through the Gamepad API, its buttons and axes should appear below.</p>
+  <p class="note">This is only an input test. Pairing a Joy-Con or plugging in the Pro Controller for this test may take it away from the Switch, so do not expect the same controller to operate both at once.</p>
+  <div class="actions">
+    <button type="button" id="startMonitor" class="primary">Start input monitor</button>
+    <button type="button" id="stopMonitor">Stop</button>
+  </div>
+  <div id="monitorStatus" class="small" aria-live="polite" style="margin-top:10px">Monitor stopped.</div>
+  <div class="terminal"><pre id="gamepadOutput">No controller data read yet.</pre></div>
+</section>
+
+<section class="panel">
+  <h2>Why the two tempting routes do not solve it</h2>
+  <div class="status">
+    <span class="dot warn"></span>
+    <div><div class="status-title">Super Mario Odyssey + GameShare</div>
+      <p class="small">Great match for Cappy: the second player controls Cappy. But GameShare guests join from a second Switch or Switch 2 system, not a phone browser. It needs a second console.</p>
+      <p><a href="https://en-americas-support.nintendo.com/app/answers/detail/a_id/27785/p/988" target="_blank" rel="noopener noreferrer">Nintendo's official Odyssey multiplayer steps ↗</a></p>
+    </div>
+  </div>
+  <div class="status">
+    <span class="dot warn"></span>
+    <div><div class="status-title">PhantomHand browser controller</div>
+      <p class="small">Its setup guide calls for an Arduino Leonardo plus a separate serial adapter. The guide says phones/tablets are not supported (Android may work but was not tested) and describes desktop Chrome setup. The hardware bridge is the missing part.</p>
+      <p><a href="https://github.com/noov-smash/PhantomHand/blob/main/GettingStartedGuide.md" target="_blank" rel="noopener noreferrer">PhantomHand setup guide ↗</a> · <a href="https://github.com/noov-smash/PhantomHand" target="_blank" rel="noopener noreferrer">Source code ↗</a></p>
+    </div>
+  </div>
+  <div class="status">
+    <span class="dot warn"></span>
+    <div><div class="status-title">Phone USB-C directly to Switch</div>
+      <p class="small">In our test, Android showed file-transfer/tether/MIDI/charging options and the console did not become a controller bridge. A browser page cannot turn that cable into a USB controller emulator by itself.</p>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>What to test now</h2>
+  <p><strong>First:</strong> tap <em>Scan again</em> and note whether WebUSB, WebHID, Web Bluetooth, and Gamepad API say “Exposed” or “Not exposed.”</p>
+  <p><strong>Then, only if useful:</strong> start the input monitor with a controller connected to the phone and tell me whether any buttons/axes change. If no controller is attached to the phone, “No controller detected” is an expected result, not a failure.</p>
+  <p class="small">These checks can rule out browser-side options. They will not make the Switch respond. With current hardware, the missing ingredient is a real control path between the browser/ChatGPT and the console.</p>
+</section>
+
+<footer>JoyGPT research page · No device chooser is opened automatically. This page does not send USB/Bluetooth commands to the Switch.</footer>
+</main>
+<script src="./app.js"></script>
+</body>
+</html>
