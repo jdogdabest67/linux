@@ -166,6 +166,19 @@ footer{font-size:.82rem;color:var(--muted);padding:10px 2px}
   <p class="small">These checks can rule out browser-side options. They will not make the Switch respond. With current hardware, the missing ingredient is a real control path between the browser/ChatGPT and the console.</p>
 </section>
 
+
+<section class="panel">
+  <h2>6. Switch browser environment tests</h2>
+  <p class="small">A bundle of read-only checks for clues about the SwitchBru browser: browser identity, display, storage, controller visibility, and exposed Nintendo- or applet-named globals. These checks do not request permissions, send device commands, or try to launch/close anything.</p>
+  <div class="actions">
+    <button type="button" id="runSwitchTests" class="primary">Run Switch tests</button>
+    <button type="button" id="copySwitchTests">Copy results</button>
+  </div>
+  <div id="switchTestsStatus" class="small" aria-live="polite" style="margin-top:10px">Tests not run yet.</div>
+  <div class="terminal"><pre id="switchTestsOutput">Run the tests to collect browser-environment clues.</pre></div>
+  <p class="note">These results describe what this webpage can see, not hidden console internals. An API being present does not mean it can control the Switch or launch a game.</p>
+</section>
+
 <footer>JoyGPT research page · No device chooser is opened automatically. This page does not send USB/Bluetooth commands to the Switch.</footer>
 </main>
 <script src="./app.js"></script>
