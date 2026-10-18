@@ -7,7 +7,7 @@
 <style>
 :root{color-scheme:dark;--bg:#10151c;--panel:#18212b;--line:#2b3947;--text:#e8f0f7;--muted:#a9bac9;--green:#8bf0b0;--amber:#ffd27a}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px system-ui,-apple-system,Segoe UI,sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
-main{max-width:850px;margin:auto;padding:18px 0 40px}h1{font-size:1.65rem;margin:.3rem 0}.sub{color:var(--muted);line-height:1.45}.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin:14px 0}.tag{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:4px 9px;color:var(--green);font-size:.82rem}.actions{display:flex;flex-wrap:wrap;gap:9px}button,a.btn{background:#263848;color:var(--text);border:1px solid #40566b;border-radius:11px;padding:12px 14px;font:inherit;text-decoration:none;display:inline-block}button:active{transform:scale(.98)}.term{background:#070b10;border:1px solid #34424f;border-radius:12px;padding:12px;font:14px/1.5 ui-monospace,monospace;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0;color:#d3e1ed}.muted{color:var(--muted);font-size:.92rem}.status{padding:9px 0;border-bottom:1px solid var(--line)}.status:last-child{border:0}.good{color:var(--green)}.warn{color:var(--amber)}code{overflow-wrap:anywhere}
+main{max-width:850px;margin:auto;padding:18px 0 40px}h1{font-size:1.65rem;margin:.3rem 0}.sub{color:var(--muted);line-height:1.45}.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin:14px 0}.tag{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:4px 9px;color:var(--green);font-size:.82rem}.actions{display:flex;flex-wrap:wrap;gap:9px}button,a.btn{background:#263848;color:var(--text);border:1px solid #40566b;border-radius:11px;padding:12px 14px;font:inherit;text-decoration:none;display:inline-block}button:active{transform:scale(.98)}.term{background:#070b10;border:1px solid #34424f;border-radius:12px;padding:12px;font:14px/1.5 ui-monospace,monospace;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0;color:#d3e1ed}.muted{color:var(--muted);font-size:.92rem}.status{padding:9px 0;border-bottom:1px solid var(--line)}.status:last-child{border:0}.good{color:var(--green)}.warn{color:var(--amber)}code{overflow-wrap:anywhere}.codec-key[aria-pressed="true"]{background:#28553e;border-color:#8bf0b0;color:#fff}
 </style></head>
 <body><main>
 <span class="tag">JOYGPT · HARDWARE TEST</span>
@@ -29,9 +29,34 @@ main{max-width:850px;margin:auto;padding:18px 0 40px}h1{font-size:1.65rem;margin
 <div class="actions"><button id="plusSignal">Test + button over WebUSB</button></div>
 <div class="term" style="margin-top:12px"><pre id="plusout">Ready. No USB test started.</pre></div>
 <p class="muted">This can only detect a + press if the browser can claim the controller's HID interface and the controller streams reports over USB. It does not synthesize a + press or inject controls into the Switch. USB initialization may change the controller's USB reporting state; the test closes the device afterward.</p></section>
-<section class="panel"><h2>8. What the result means</h2><div class="status"><span class="good">Detected:</span> only means the browser reports an API or a device in its chooser.</div><div class="status"><span class="warn">Not detected:</span> does not mean the Joy-Con is broken. It may be connected only to the Switch, or Android may not expose it to this browser.</div><div class="status">Even if the phone sees a Joy-Con, this page cannot automatically make the same Joy-Con send inputs to both the phone and Switch. We need an actual supported connection/bridge for that, and this test does not bypass Nintendo's controller pairing.</div></section>
+<section class="panel">
+<h2>8. C → WebAssembly report encoder</h2>
+<p>This is the compiled-language experiment: a tiny C module, compiled to WebAssembly, runs inside this page. Tap the pretend buttons and move the axes to make a six-byte JoyGPT demo packet.</p>
+<div class="status" id="wasmStatus"><span class="warn">Loading:</span> compiled C module…</div>
+<div class="actions" id="codecKeys" style="margin:12px 0">
+<button type="button" class="codec-key" data-mask="1" aria-pressed="false">A</button>
+<button type="button" class="codec-key" data-mask="2" aria-pressed="false">B</button>
+<button type="button" class="codec-key" data-mask="4" aria-pressed="false">X</button>
+<button type="button" class="codec-key" data-mask="8" aria-pressed="false">Y</button>
+<button type="button" class="codec-key" data-mask="16" aria-pressed="false">L</button>
+<button type="button" class="codec-key" data-mask="32" aria-pressed="false">R</button>
+<button type="button" class="codec-key" data-mask="64" aria-pressed="false">+</button>
+<button type="button" class="codec-key" data-mask="128" aria-pressed="false">−</button>
+<button type="button" id="clearCodec">Clear buttons</button>
+</div>
+<div style="display:grid;grid-template-columns:1fr;gap:12px">
+<label for="axisX">Pretend stick X: <strong id="axisXValue">128</strong>
+<input id="axisX" type="range" min="0" max="255" value="128" style="width:100%;accent-color:#8bf0b0"></label>
+<label for="axisY">Pretend stick Y: <strong id="axisYValue">128</strong>
+<input id="axisY" type="range" min="0" max="255" value="128" style="width:100%;accent-color:#8bf0b0"></label>
+</div>
+<div class="term" style="margin-top:12px"><pre id="wasmOutput">Waiting for compiled module…</pre></div>
+<p class="muted">Important: this is a real C-to-WebAssembly test, but the packet is JoyGPT's own invented demo format, not Nintendo's protocol. The buttons are simulated. This test does not access USB/Bluetooth or send any input to the Switch. Source: <a href="./joygpt-codec.c">C code</a> · <a href="./joygpt-codec.js">WebAssembly loader</a>.</p>
+</section>
+<section class="panel"><h2>9. What the result means</h2><div class="status"><span class="good">Detected:</span> only means the browser reports an API or a device in its chooser.</div><div class="status"><span class="warn">Not detected:</span> does not mean the Joy-Con is broken. It may be connected only to the Switch, or Android may not expose it to this browser.</div><div class="status">Even if the phone sees a Joy-Con, this page cannot automatically make the same Joy-Con send inputs to both the phone and Switch. We need an actual supported connection/bridge for that, and this test does not bypass Nintendo's controller pairing.</div></section>
 <p class="muted">Privacy and safety: chooser actions require your tap. The interface and HID access tests may open a selected device, but they do not send controller commands or read input reports. The HID test only lists report-collection metadata and then closes the device.</p>
-</main><script>
+</main><script src="./joygpt-codec.js"></script>
+<script>
 const $=id=>document.getElementById(id);
 function scan(){const rows=[
 ['Secure HTTPS context',isSecureContext?'Yes':'No'],
@@ -118,5 +143,53 @@ $('inspectUsb').onclick=async()=>{const out=$('inspectUsbOut');if(!navigator.usb
 $('testInterface').onclick=async()=>{const out=$('inspectUsbOut');if(!navigator.usb||!navigator.usb.requestDevice){out.textContent='WebUSB chooser unavailable. No connection changed.';return;}let d=null,opened=false,claimed=false;try{d=await navigator.usb.requestDevice({filters:[{vendorId:0x057e,productId:0x2069}]});await d.open();opened=true;await d.claimInterface(1);claimed=true;out.textContent='SUCCESS: browser opened the selected controller and claimed vendor-specific interface 1 without sending any USB data.\\nNo endpoints were read or written. Releasing interface and closing device…';}catch(e){out.textContent='Interface 1 access test failed: '+e.name+': '+e.message+'\\nNo USB data was sent. Cleanup will be attempted.';}finally{if(d){try{if(claimed)await d.releaseInterface(1);}catch(e){}try{if(opened)await d.close();}catch(e){}}out.textContent+='\\nCleanup complete: interface released if claimed; device closed if opened.';}};
 $('hid').onclick=async()=>{if(!('hid'in navigator)){ $('hidout').textContent='WebHID is not available in this browser/page context.';return;}try{const ds=await navigator.hid.requestDevice({filters:[]});$('hidout').textContent=ds.length?'Chooser selected:\n'+ds.map(d=>(d.productName||'unnamed HID device')+' (vendor 0x'+d.vendorId.toString(16)+', product 0x'+d.productId.toString(16)+')').join('\n')+'\nNo device opened; no data sent.':'No device selected.';}catch(e){$('hidout').textContent=e.name==='NotFoundError'?'Picker closed or no device selected.':e.name+': '+e.message;}};
 $('testHid').onclick=async()=>{const out=$('hidout');if(!navigator.hid||!navigator.hid.requestDevice){out.textContent='WebHID chooser unavailable in this browser/page context. No connection changed.';return;}let d=null,opened=false;try{const ds=await navigator.hid.requestDevice({filters:[{vendorId:0x057e,productId:0x2069}]});if(!ds.length){out.textContent='No controller selected. No connection changed.';return;}d=ds[0];await d.open();opened=true;const lines=['SUCCESS: WebHID opened '+(d.productName||'the selected controller')+'.','Vendor ID: 0x'+d.vendorId.toString(16)+' | Product ID: 0x'+d.productId.toString(16),'Collections exposed: '+d.collections.length];d.collections.forEach((c,i)=>{lines.push('Collection '+(i+1)+': usage page 0x'+Number(c.usagePage||0).toString(16)+', usage 0x'+Number(c.usage||0).toString(16)+', input reports '+(c.inputReports||[]).length+', output reports '+(c.outputReports||[]).length+', feature reports '+(c.featureReports||[]).length);});lines.push('No input reports read and no reports written. Closing device…');out.textContent=lines.join('\n');}catch(e){out.textContent='HID access test failed: '+e.name+': '+e.message+'\nNo HID reports were read or written.';}finally{if(d&&opened){try{await d.close();out.textContent+='\nCleanup complete: HID device closed.';}catch(e){out.textContent+='\nCould not close HID device cleanly: '+e.message;}}}};
+
+const demoButtonNames={1:"A",2:"B",4:"X",8:"Y",16:"L",32:"R",64:"+",128:"−"};
+let joygptCodec=null;
+let demoButtonMask=0;
+function updateCodecDemo(){
+ const x=Number($("axisX").value), y=Number($("axisY").value);
+ $("axisXValue").textContent=String(x); $("axisYValue").textContent=String(y);
+ if(!joygptCodec){$("wasmOutput").textContent="The compiled module is not ready yet.";return;}
+ try{
+  const report=joygptCodec.encode(demoButtonMask,x,y);
+  const hex=report.map(v=>v.toString(16).padStart(2,"0")).join(" ");
+  const active=Object.entries(demoButtonNames).filter(([bit])=>(demoButtonMask & Number(bit))!==0).map(([,name])=>name);
+  $("wasmOutput").textContent="C module version: "+joygptCodec.version+
+   "\nDemo packet (hex): "+hex+
+   "\nButton mask: 0x"+demoButtonMask.toString(16).padStart(4,"0")+
+   "\nPretend stick: X="+x+", Y="+y+
+   "\nPressed in simulation: "+(active.length?active.join(", "):"none")+
+   "\n\nThese are encoded demo bytes only. No controller or console was contacted.";
+ }catch(e){$("wasmOutput").textContent="Encoding failed: "+e.name+": "+e.message;}
+}
+document.querySelectorAll(".codec-key").forEach(button=>{
+ button.addEventListener("click",()=>{
+  const bit=Number(button.dataset.mask);
+  demoButtonMask ^= bit;
+  button.setAttribute("aria-pressed",String((demoButtonMask & bit)!==0));
+  updateCodecDemo();
+ });
+});
+$("clearCodec").addEventListener("click",()=>{
+ demoButtonMask=0;
+ document.querySelectorAll(".codec-key").forEach(button=>button.setAttribute("aria-pressed","false"));
+ updateCodecDemo();
+});
+$("axisX").addEventListener("input",updateCodecDemo);
+$("axisY").addEventListener("input",updateCodecDemo);
+if(typeof window.loadJoyGPTCodec==="function"){
+ window.loadJoyGPTCodec().then(codec=>{
+  joygptCodec=codec;
+  $("wasmStatus").innerHTML='<span class="good">Loaded:</span> C module compiled to WebAssembly and running in this browser.';
+  updateCodecDemo();
+ }).catch(error=>{
+  $("wasmStatus").innerHTML='<span class="warn">Unavailable:</span> '+error.name+': '+error.message;
+  $("wasmOutput").textContent="The browser could not load the compiled module.";
+ });
+}else{
+ $("wasmStatus").innerHTML='<span class="warn">Loader missing:</span> joygpt-codec.js did not load.';
+}
+
 scan();
 </script></body></html>
