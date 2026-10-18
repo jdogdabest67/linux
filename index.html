@@ -3,69 +3,37 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#10151c">
-<title>JoyGPT Linux Lab</title>
+<title>Joy-Con Link Lab · JoyGPT</title>
 <style>
 :root{color-scheme:dark;--bg:#10151c;--panel:#18212b;--line:#2b3947;--text:#e8f0f7;--muted:#a9bac9;--green:#8bf0b0;--amber:#ffd27a}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px system-ui,-apple-system,Segoe UI,sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
-main{max-width:850px;margin:auto;padding:18px 0 40px}h1{font-size:1.65rem;margin:.3rem 0}.sub{color:var(--muted);line-height:1.45}.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin:14px 0}.tag{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:4px 9px;color:var(--green);font-size:.82rem}.actions{display:flex;flex-wrap:wrap;gap:9px}button,a.btn{background:#263848;color:var(--text);border:1px solid #40566b;border-radius:11px;padding:12px 14px;font:inherit;text-decoration:none;display:inline-block}button:active{transform:scale(.98)}.term{background:#070b10;border:1px solid #34424f;border-radius:12px;padding:12px;font:14px/1.5 ui-monospace,SFMono-Regular,monospace;overflow-wrap:anywhere}.prompt{color:var(--green)}input{background:#101820;color:var(--text);border:1px solid #40566b;border-radius:9px;padding:12px;min-width:0;flex:1;font:16px ui-monospace,monospace}pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0;color:#d3e1ed}.muted{color:var(--muted);font-size:.92rem}iframe{width:100%;height:62vh;min-height:390px;border:1px solid var(--line);border-radius:12px;background:#070b10}.status{padding:9px 0;border-bottom:1px solid var(--line)}.status:last-child{border:0}.good{color:var(--green)}.warn{color:var(--amber)}code{overflow-wrap:anywhere}
-</style>
-</head>
+main{max-width:850px;margin:auto;padding:18px 0 40px}h1{font-size:1.65rem;margin:.3rem 0}.sub{color:var(--muted);line-height:1.45}.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin:14px 0}.tag{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:4px 9px;color:var(--green);font-size:.82rem}.actions{display:flex;flex-wrap:wrap;gap:9px}button,a.btn{background:#263848;color:var(--text);border:1px solid #40566b;border-radius:11px;padding:12px 14px;font:inherit;text-decoration:none;display:inline-block}button:active{transform:scale(.98)}.term{background:#070b10;border:1px solid #34424f;border-radius:12px;padding:12px;font:14px/1.5 ui-monospace,monospace;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0;color:#d3e1ed}.muted{color:var(--muted);font-size:.92rem}.status{padding:9px 0;border-bottom:1px solid var(--line)}.status:last-child{border:0}.good{color:var(--green)}.warn{color:var(--amber)}code{overflow-wrap:anywhere}
+</style></head>
 <body><main>
-<span class="tag">JOYGPT · EXPERIMENTAL</span>
-<h1>🐧 JoyGPT Linux Lab</h1>
-<p class="sub">A mobile-friendly launchpad for a real browser Linux environment. The command box below is a diagnostics console, not a fake Linux shell. The embedded Linux runtime is separate and may have browser/sandbox limits.</p>
-<section class="panel">
-<h2>1. Browser & network capabilities</h2>
-<div id="checks" class="muted">Checking browser capabilities…</div>
-<div class="actions" style="margin-top:12px"><button id="refresh">Refresh checks</button><button id="usb">Test USB picker</button><button id="serial">Test serial picker</button></div>
-<p class="muted">Device pickers only list compatible USB/serial devices actually attached and exposed to the browser. Opening a picker is not a connection to the Switch.</p>
-</section>
-<section class="panel">
-<h2>2. Run diagnostics</h2>
-<div class="term" aria-live="polite"><div><span class="prompt">joygpt@browser:~$</span> <span id="last">help</span></div><pre id="out">Welcome. Type help, capabilities, or open-linux. These are browser diagnostics, not a real shell.</pre></div>
-<form id="cmdform" class="actions" style="margin-top:10px"><input id="cmd" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Try: capabilities" aria-label="Diagnostic command"><button type="submit">Run</button></form>
-<p class="muted">This console only runs the listed safe diagnostics. It cannot execute arbitrary Linux commands.</p>
-</section>
-<section class="panel" id="linux">
-<h2>3. Launch browser Linux</h2>
-<p>Try the external WebVM Linux environment. It runs in the browser sandbox, not on your phone's Wi-Fi hardware. If embedding is blocked, open it in a new tab.</p>
-<div class="actions"><a class="btn" href="https://webvm.io/" target="_blank" rel="noopener">Open WebVM in new tab ↗</a><button id="embed">Show WebVM here</button></div>
-<div id="framewrap" hidden style="margin-top:12px"><iframe title="WebVM browser Linux" src="about:blank" loading="lazy" allow="clipboard-read; clipboard-write"></iframe><p class="muted">If the frame stays blank or reports a security error, use the new-tab link. WebVM may restrict embedding.</p></div>
-</section>
-<section class="panel">
-<h2>4. What this can and cannot test</h2>
-<div class="status"><span class="good">Can:</span> check browser APIs, launch a browser Linux runtime, and see what that runtime exposes.</div>
-<div class="status"><span class="warn">Cannot assume:</span> access to Android's physical Wi-Fi adapter, raw 802.11 action-frame transmission, or Splatoon LDN authentication.</div>
-<div class="status">A cloud/virtual Linux network interface is not the same as the phone's physical radio. We'll only claim a live connection if a real exchange is observed.</div>
-</section>
-<p class="muted">No data is uploaded by this page. Device picker buttons only request browser chooser dialogs; this page does not read or transmit device data.</p>
-</main>
-<script>
+<span class="tag">JOYGPT · HARDWARE TEST</span>
+<h1>🎮 Joy-Con Link Lab</h1>
+<p class="sub">Checks what this phone's browser can actually see, then opens the WebUSB/WebHID device chooser when supported. The goal is to investigate a possible ChatGPT → Joy-Con → Switch control path, without pretending a connection worked when it didn't.</p>
+<section class="panel"><h2>1. Browser API scan</h2><div id="checks" class="muted">Scanning…</div><div class="actions" style="margin-top:12px"><button id="refresh">Rescan APIs</button><button id="gamepad">Check gamepads</button></div><p class="muted">A Joy-Con paired to the Switch is normally communicating with the Switch, not this phone. A browser can only detect devices exposed to it by Android and the browser.</p></section>
+<section class="panel"><h2>2. Search for a USB device</h2><p>Opens the real WebUSB chooser. It searches devices the browser is allowed to offer, not every device on the console's USB bus.</p><div class="actions"><button id="usb">Open WebUSB picker</button></div><div class="term" style="margin-top:12px"><pre id="usbout">Waiting for test…</pre></div></section>
+<section class="panel"><h2>3. Search for a HID controller</h2><p>WebHID is a separate browser API used by some USB/Bluetooth human-interface devices. If available, this opens its real device chooser.</p><div class="actions"><button id="hid">Open WebHID picker</button></div><div class="term" style="margin-top:12px"><pre id="hidout">Waiting for test…</pre></div></section>
+<section class="panel"><h2>4. What the result means</h2><div class="status"><span class="good">Detected:</span> only means the browser reports an API or a device in its chooser.</div><div class="status"><span class="warn">Not detected:</span> does not mean the Joy-Con is broken. It may be connected only to the Switch, or Android may not expose it to this browser.</div><div class="status">Even if the phone sees a Joy-Con, this page cannot automatically make the same Joy-Con send inputs to both the phone and Switch. We need an actual supported connection/bridge for that, and this test does not bypass Nintendo's controller pairing.</div></section>
+<p class="muted">Privacy: chooser actions require your tap. This page does not open a selected device or transmit controller data.</p>
+</main><script>
 const $=id=>document.getElementById(id);
-function checks(){
- const rows=[
- ['Secure context',isSecureContext?'Available':'Not secure context'],
- ['WebUSB',('usb' in navigator)?'API available':'Unavailable'],
- ['Web Serial',('serial' in navigator)?'API available':'Unavailable'],
- ['Web Bluetooth',('bluetooth' in navigator)?'API available':'Unavailable'],
- ['WebHID',('hid' in navigator)?'API available':'Unavailable'],
- ['WebSocket',('WebSocket' in window)?'Available':'Unavailable'],
- ['WebRTC data channels',('RTCPeerConnection' in window)?'Available':'Unavailable'],
- ['Raw Wi-Fi frame API','Not exposed by standard browser APIs']
- ];
- $('checks').innerHTML=rows.map(([a,b])=>'<div class="status"><strong>'+a+':</strong> '+b+'</div>').join('');
+function scan(){const rows=[
+['Secure HTTPS context',isSecureContext?'Yes':'No'],
+['WebUSB',('usb'in navigator)?'Available':'Unavailable'],
+['WebHID',('hid'in navigator)?'Available':'Unavailable'],
+['Web Serial',('serial'in navigator)?'Available':'Unavailable'],
+['Gamepad API',('getGamepads'in navigator)?'Available':'Unavailable'],
+['Web Bluetooth',('bluetooth'in navigator)?'Available':'Unavailable'],
+['USB devices already permitted','Checking…']
+];$('checks').innerHTML=rows.map(([k,v])=>'<div class="status"><strong>'+k+':</strong> '+v+'</div>').join('');
+if('usb'in navigator && navigator.usb.getDevices){navigator.usb.getDevices().then(ds=>{const el=[...$('checks').children].find(x=>x.textContent.startsWith('USB devices already permitted:'));if(el)el.innerHTML='<strong>USB devices already permitted:</strong> '+ds.length;}).catch(()=>{});}
 }
-function output(command,msg){$('last').textContent=command;$('out').textContent=msg}
-$('refresh').onclick=()=>{checks();output('capabilities','Browser capability list refreshed. This describes browser APIs, not Linux kernel or radio access.')};
-$('cmdform').addEventListener('submit',e=>{e.preventDefault();const c=$('cmd').value.trim().toLowerCase();if(!c)return;
-if(c==='help')output(c,'Available diagnostics:\n  help           Show this list\n  capabilities   Refresh browser API checks\n  open-linux     Show the WebVM launch option\n  clear          Clear this console\n\nThis is not a shell and does not pretend to execute Linux commands.');
-else if(c==='capabilities'){checks();output(c,'Capability checks refreshed. See the list above. Browser APIs do not provide raw Wi-Fi frame access.')}
-else if(c==='open-linux'){ $('framewrap').hidden=false; $('framewrap').querySelector('iframe').src='https://webvm.io/';output(c,'Requested WebVM embed. If it is blocked, use Open WebVM in new tab.')}
-else if(c==='clear')output(c,'Console cleared. Type help for diagnostics.');
-else output(c,'Unknown diagnostic command: '+c+'\nType help for the supported commands. This page intentionally does not execute arbitrary shell commands.');
-$('cmd').value='';});
-$('usb').onclick=async()=>{if(!('usb'in navigator)){output('usb','WebUSB is not available in this browser context.');return}try{const d=await navigator.usb.requestDevice({filters:[]});output('usb','A USB device was selected: '+(d.productName||'unnamed device')+'. No interface was opened and no data was transferred.')}catch(e){output('usb',e.name==='NotFoundError'?'Picker closed or no device selected.':e.name+': '+e.message)}};
-$('serial').onclick=async()=>{if(!('serial'in navigator)){output('serial','Web Serial is not available in this browser context.');return}try{const p=await navigator.serial.requestPort();output('serial','A serial port was selected. It was not opened and no data was transferred.')}catch(e){output('serial',e.name==='NotFoundError'?'Picker closed or no port selected.':e.name+': '+e.message)}};
-$('embed').onclick=()=>{$('framewrap').hidden=false;$('framewrap').querySelector('iframe').src='https://webvm.io/';};
-checks();
+$('refresh').onclick=scan;
+$('gamepad').onclick=()=>{if(!navigator.getGamepads){$('checks').insertAdjacentHTML('beforeend','<div class="status">Gamepads: API unavailable</div>');return}const pads=[...navigator.getGamepads()].filter(Boolean);$('checks').insertAdjacentHTML('beforeend','<div class="status"><strong>Gamepads currently visible:</strong> '+(pads.length?pads.map(p=>p.id+' (index '+p.index+')').join('; '):'none')+'</div>');};
+$('usb').onclick=async()=>{if(!('usb'in navigator)){ $('usbout').textContent='WebUSB is not available in this browser/page context.';return;}try{const d=await navigator.usb.requestDevice({filters:[]});$('usbout').textContent='Chooser selected: '+(d.productName||'unnamed USB device')+'\nVendor ID: 0x'+(d.vendorId||0).toString(16)+'\nProduct ID: 0x'+(d.productId||0).toString(16)+'\nNo interface opened; no data sent.';}catch(e){$('usbout').textContent=e.name==='NotFoundError'?'Picker closed or no device selected.':e.name+': '+e.message;}};
+$('hid').onclick=async()=>{if(!('hid'in navigator)){ $('hidout').textContent='WebHID is not available in this browser/page context.';return;}try{const ds=await navigator.hid.requestDevice({filters:[]});$('hidout').textContent=ds.length?'Chooser selected:\n'+ds.map(d=>(d.productName||'unnamed HID device')+' (vendor 0x'+d.vendorId.toString(16)+', product 0x'+d.productId.toString(16)+')').join('\n')+'\nNo device opened; no data sent.':'No device selected.';}catch(e){$('hidout').textContent=e.name==='NotFoundError'?'Picker closed or no device selected.':e.name+': '+e.message;}};
+scan();
 </script></body></html>
