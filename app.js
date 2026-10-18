@@ -338,7 +338,8 @@
     const output = $("switchTestsOutput");
     const status = $("switchTestsStatus");
     const rows = [];
-    const add = (label, value) => rows.push(label.padEnd(31, " ") + String(value));
+    status.textContent = "Running read-only checks…";
+    const add = (label, value) => rows.push(label + ": " + String(value));
     const safe = (fn, fallback = "unavailable") => {
       try {
         const value = fn();
@@ -405,7 +406,14 @@
     status.textContent = "Finished " + rows.length + " read-only checks. Copy the output and send it back here.";
   }
 
-  $("runSwitchTests").addEventListener("click", runSwitchTests);
+  $("runSwitchTests").addEventListener("click", () => {
+    try {
+      runSwitchTests();
+    } catch (error) {
+      $("switchTestsStatus").textContent = "Test crashed: " + (error && error.name ? error.name : "Error") + ": " + (error && error.message ? error.message : String(error));
+      $("switchTestsOutput").textContent = "The test button ran, but a diagnostic threw an error.\n\n" + (error && error.stack ? error.stack : String(error));
+    }
+  });
   $("copySwitchTests").addEventListener("click", () => {
     const textToCopy = $("switchTestsOutput").textContent;
     if (!textToCopy || textToCopy.startsWith("Run the tests")) {
