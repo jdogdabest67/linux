@@ -334,7 +334,7 @@
       "window.nx.endApplet: " + typeof endAppletValue,
       "",
       "Safety: this check only reads properties. It did not call endApplet or attempt to launch a game."
-    ].join("\\n");
+    ].join("\n");
   }
 
   $("checkSwitchApi").addEventListener("click", checkSwitchApi);
