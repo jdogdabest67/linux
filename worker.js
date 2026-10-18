@@ -35,7 +35,7 @@ export default {
       return json({
         ok: true,
         service: "joygpt-signal-bridge",
-        version: "ws-lab-2",
+        version: "ws-lab-3",
         websocketSupported: true
       });
     }
@@ -218,12 +218,12 @@ export class SignalStore {
     }
 
     // Typed JSON envelope for text, JSON values, and small app events.
-    const validKinds = ["text", "json", "event", "meta"];
+    const validKinds = ["text", "markdown", "json", "event", "meta", "reaction", "status"];
     if (payload.type !== "message" || payload.v !== 1 ||
         typeof payload.id !== "string" || payload.id.length > 100 ||
         !validKinds.includes(payload.kind) ||
         !Object.prototype.hasOwnProperty.call(payload, "payload")) {
-      try { ws.send(JSON.stringify({ type: "error", id: payload && payload.id, error: "Expected type=message, v=1, kind=text/json/event/meta, id, payload." })); } catch (_) {}
+      try { ws.send(JSON.stringify({ type: "error", id: payload && payload.id, error: "Expected type=message, v=1, kind=text/markdown/json/event/meta/reaction/status, id, payload." })); } catch (_) {}
       return;
     }
     let payloadBytes;
