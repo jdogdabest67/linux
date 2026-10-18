@@ -87,3 +87,28 @@ The Switch browser reported that its `WebSocket` constructor is exposed. Browser
 References:
 - MDN, [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
 - Cloudflare, [Use WebSockets with Durable Objects](https://developers.cloudflare.com/durable-objects/best-practices/websockets/)
+
+
+## Input-event mapping and game-control route research (Oct 18, 2026)
+
+The Switch browser reports controller-related events reaching the page. Section 8 now records the event type, key/code, repeat/modifier fields, and `isTrusted`; skips text-entry fields; can copy the log; and can optionally relay event summaries to the phone through the live WebSocket connection. The synthetic-event probe creates a fake keydown only in the webpage and reports whether the browser marks it trusted. It does not send any event to the Switch OS/game.
+
+Section 7 includes a ten-marker WebSocket latency/reliability probe and recent echo RTT min/average/max. This measures the message transport only.
+
+### What could make commands reach a game?
+
+A web page's DOM events and an actual controller report are different layers. The best documented architecture we found is a physical controller bridge: browser commands → a serial/network link → a microcontroller acting as a Switch-compatible controller. [PhantomHand's project](https://github.com/noov-smash/PhantomHand) documents an ATmega32U4 Arduino Leonardo with a serial adapter and the [NintendoSwitchControlLibrary](https://github.com/lefmarna/NintendoSwitchControlLibrary). This gives us a credible design pattern, not proof that those exact components work on Switch 2. Test compatibility before buying hardware or writing an implementation around it.
+
+Other possibilities:
+- [Android BluetoothHidDevice](https://developer.android.com/reference/android/bluetooth/BluetoothHidDevice) is a native Android API, not a browser API, and requires an installed app plus Bluetooth permissions. This is currently blocked by the managed-phone/browser-only setup; compatibility with Switch 2 is not established.
+- [joycontrol](https://github.com/mart1nro/joycontrol) explores controller emulation over Bluetooth using a Linux host. It would require checking the old desktop, its Bluetooth adapter, and whether the project supports Switch 2. That support is not assumed.
+- Browser-only JavaScript has no known path from this page to an actual game controller report. The Switch browser scan found no WebUSB/WebHID/Web Bluetooth APIs, visible Gamepad device, or exposed `window.nx` applet object.
+
+Nintendo's official [Switch and Switch 2 accessory compatibility page](https://en-americas-support.nintendo.com/app/answers/detail/a_id/68426/~/nintendo-switch-and-nintendo-switch) confirms compatibility for specified controllers and accessories but does not establish compatibility for our custom microcontroller bridge. Treat Switch 2 support as an open hardware test.
+
+### Sources
+- [PhantomHand README](https://github.com/noov-smash/PhantomHand), controller bridge architecture and required hardware.
+- [Android BluetoothHidDevice reference](https://developer.android.com/reference/android/bluetooth/BluetoothHidDevice), native app API.
+- [MDN Event.isTrusted](https://developer.mozilla.org/en-US/docs/Web/API/Event/isTrusted), distinguishes browser-generated events from events dispatched through JavaScript.
+- [Cloudflare Durable Objects WebSocket docs](https://developers.cloudflare.com/durable-objects/best-practices/websockets/), live two-way browser-to-server relay.
+- [Nintendo Switch 2 compatibility](https://en-americas-support.nintendo.com/app/answers/detail/a_id/68426/~/nintendo-switch-and-nintendo-switch), official supported accessory list.
