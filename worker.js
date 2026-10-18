@@ -158,9 +158,9 @@ export class SignalStore {
             typeof header.name !== "string" || header.name.length > 200 ||
             typeof header.mimeType !== "string" || header.mimeType.length > 120 ||
             !Number.isInteger(header.chunkIndex) || !Number.isInteger(header.chunkCount) ||
-            header.chunkCount < 1 || header.chunkCount > 10000 ||
+            header.chunkCount < 1 || header.chunkCount > 1000 ||
             header.chunkIndex < 0 || header.chunkIndex >= header.chunkCount ||
-            !Number.isInteger(header.size) || header.size < 0 || header.size > 100000000) {
+            !Number.isInteger(header.size) || header.size < 0 || header.size > 10000000) {
           throw new Error("Invalid binary packet metadata.");
         }
         const receivedAt = Date.now();
@@ -175,10 +175,9 @@ export class SignalStore {
               toClientId: attachment.clientId || "unknown-client",
               serverReceivedAt: receivedAt
             };
-            // Send metadata separately for observability; the packet itself is
-            // self-describing so receivers can still pair it if frames interleave.
-            peer.send(JSON.stringify(meta));
-            peer.send(bytes);
+            // The binary frame contains its own metadata header, so there is
+            // no separate metadata frame to become detached from its payload.
+            peer.send(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
           } catch (_) {
             try { peer.close(1011, "Could not relay binary packet"); } catch (_) {}
           }
