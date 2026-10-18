@@ -23,7 +23,12 @@ main{max-width:850px;margin:auto;padding:18px 0 40px}h1{font-size:1.65rem;margin
 <p class="muted">Goal: find out what is genuinely possible with the hardware we have, not label a browser test as a working connection when it isn't.</p></section>
 <section class="panel"><h2>4. Search for a USB device</h2><p>Opens the real WebUSB chooser. It searches devices the browser is allowed to offer, not every device on the console's USB bus.</p><div class="actions"><button id="usb">Open WebUSB picker</button></div><div class="term" style="margin-top:12px"><pre id="usbout">Waiting for test…</pre></div></section>
 <section class="panel"><h2>5. Search for a HID controller</h2><p>WebHID is a separate browser API used by some USB/Bluetooth human-interface devices. If available, this opens its real device chooser.</p><div class="actions"><button id="hid">Open WebHID picker</button></div><div class="term" style="margin-top:12px"><pre id="hidout">Waiting for test…</pre></div></section>
-<section class="panel"><h2>6. What the result means</h2><div class="status"><span class="good">Detected:</span> only means the browser reports an API or a device in its chooser.</div><div class="status"><span class="warn">Not detected:</span> does not mean the Joy-Con is broken. It may be connected only to the Switch, or Android may not expose it to this browser.</div><div class="status">Even if the phone sees a Joy-Con, this page cannot automatically make the same Joy-Con send inputs to both the phone and Switch. We need an actual supported connection/bridge for that, and this test does not bypass Nintendo's controller pairing.</div></section>
+<section class="panel"><h2>6. Send a + button signal</h2>
+<p>This is the first outbound-control test. Choose a controller that appears in the Gamepad API monitor, then tap the button below.</p>
+<div class="actions"><button id="plusSignal">Send + button signal</button></div>
+<div class="term" style="margin-top:12px"><pre id="plusout">Ready. No signal sent yet.</pre></div>
+<p class="muted">Important limitation: browser Gamepad API is input-only. A webpage cannot make a physical controller's + button become pressed, and controller button presses cannot be injected into the Switch this way. If the connected gamepad exposes a vibration actuator, this test can send a short vibration as an outbound signal, but vibration is not a + press.</p></section>
+<section class="panel"><h2>7. What the result means</h2><div class="status"><span class="good">Detected:</span> only means the browser reports an API or a device in its chooser.</div><div class="status"><span class="warn">Not detected:</span> does not mean the Joy-Con is broken. It may be connected only to the Switch, or Android may not expose it to this browser.</div><div class="status">Even if the phone sees a Joy-Con, this page cannot automatically make the same Joy-Con send inputs to both the phone and Switch. We need an actual supported connection/bridge for that, and this test does not bypass Nintendo's controller pairing.</div></section>
 <p class="muted">Privacy: chooser actions require your tap. This page does not open a selected device or transmit controller data.</p>
 </main><script>
 const $=id=>document.getElementById(id);
@@ -39,6 +44,24 @@ function scan(){const rows=[
 if('usb'in navigator && navigator.usb.getDevices){navigator.usb.getDevices().then(ds=>{const el=[...$('checks').children].find(x=>x.textContent.startsWith('USB devices already permitted:'));if(el)el.innerHTML='<strong>USB devices already permitted:</strong> '+ds.length;}).catch(()=>{});}
 }
 $('refresh').onclick=scan;
+$('plusSignal').onclick=async()=>{
+ const out=$('plusout');
+ if(!navigator.getGamepads){out.textContent='Gamepad API unavailable. No signal sent.';return;}
+ const pads=[...navigator.getGamepads()].filter(Boolean);
+ if(!pads.length){out.textContent='No gamepad is visible to this page. Connect/pair one to the phone and press a button first. No signal sent.';return;}
+ const pad=pads.find(p=>p.vibrationActuator || (p.hapticActuators&&p.hapticActuators.length));
+ if(!pad){out.textContent='Found controller(s): '+pads.map(p=>p.id).join('; ')+'\\nNo supported vibration actuator is exposed. The browser cannot send a + button press, so no command was sent.';return;}
+ try{
+  if(pad.vibrationActuator && typeof pad.vibrationActuator.playEffect==='function'){
+   await pad.vibrationActuator.playEffect('dual-rumble',{duration:180,strongMagnitude:0.35,weakMagnitude:0.2});
+  }else if(pad.hapticActuators && pad.hapticActuators[0] && typeof pad.hapticActuators[0].pulse==='function'){
+   await pad.hapticActuators[0].pulse(0.35,180);
+  }else{
+   out.textContent='A possible haptic actuator was listed, but this browser exposes no supported vibration method. No + press sent.';return;
+  }
+  out.textContent='Sent a short vibration request to: '+pad.id+'\\nThis confirms only a haptic output path. It did NOT press + and did NOT send input to the Switch.';
+ }catch(e){out.textContent='Vibration request failed: '+e.name+': '+e.message+'\\nNo + button press was sent.';}
+};
 $('gamepad').onclick=()=>{if(!navigator.getGamepads){$('checks').insertAdjacentHTML('beforeend','<div class="status">Gamepads: API unavailable</div>');return}const pads=[...navigator.getGamepads()].filter(Boolean);$('checks').insertAdjacentHTML('beforeend','<div class="status"><strong>Gamepads currently visible:</strong> '+(pads.length?pads.map(p=>p.id+' (index '+p.index+')').join('; '):'none')+'</div>');renderPads();};
 function renderPads(){
  if(!navigator.getGamepads){$('padout').textContent='Gamepad API unavailable.';return}
