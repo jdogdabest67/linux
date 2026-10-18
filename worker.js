@@ -12,6 +12,20 @@ function json(data, status = 200) {
   });
 }
 
+// Apply CORS headers at the public Worker boundary too, rather than relying
+// only on the Durable Object's response headers surviving the internal fetch.
+function ensureCors(response) {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(corsHeaders)) {
+    headers.set(name, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -31,11 +45,11 @@ export default {
       const allowedCommand = text === "PING" || text === "FLASH" || /^SAY:.{1,110}$/s.test(text) || /^PRESS:(A|B|X|Y|UP|DOWN|LEFT|RIGHT|START|SELECT)$/.test(text);
       if (!id || !allowedCommand) return json({ ok: false, error: "Allowed messages: PING, FLASH, SAY:your message, or PRESS:A/B/X/Y/UP/DOWN/LEFT/RIGHT/START/SELECT." }, 400);
       const stub = env.SIGNAL_STORE.get(env.SIGNAL_STORE.idFromName("shared-test-store"));
-      return stub.fetch("https://signal-store.internal/message", {
+      return ensureCors(await stub.fetch("https://signal-store.internal/message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session, id, from, text, at: Date.now() })
-      });
+      }));
     }
 
     if (url.pathname === "/api/messages" && request.method === "GET") {
@@ -44,7 +58,7 @@ export default {
         return json({ ok: false, error: "Provide a valid session code." }, 400);
       }
       const stub = env.SIGNAL_STORE.get(env.SIGNAL_STORE.idFromName("shared-test-store"));
-      return stub.fetch("https://signal-store.internal/messages?session=" + encodeURIComponent(session));
+      return ensureCors(await stub.fetch("https://signal-store.internal/messages?session=" + encodeURIComponent(session)));
     }
 
     return json({ ok: false, error: "JoyGPT signal test API. Use POST /api/message or GET /api/messages?session=..." }, 404);
