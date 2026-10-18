@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#10151c">
-<title>Joy-Con Link Lab · JoyGPT</title>
+<title>🌙 Joy-Con Link Lab · JoyGPT</title>
 <style>
 :root{color-scheme:dark;--bg:#10151c;--panel:#18212b;--line:#2b3947;--text:#e8f0f7;--muted:#a9bac9;--green:#8bf0b0;--amber:#ffd27a}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px system-ui,-apple-system,Segoe UI,sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
@@ -11,7 +11,7 @@ main{max-width:850px;margin:auto;padding:18px 0 40px}h1{font-size:1.65rem;margin
 </style></head>
 <body><main>
 <span class="tag">JOYGPT · HARDWARE TEST</span>
-<h1>🎮 Joy-Con Link Lab</h1>
+<h1>🌙 🎮 Joy-Con Link Lab</h1>
 <p class="sub">Checks what this phone's browser can actually see, then opens the WebUSB/WebHID device chooser when supported. The goal is to investigate a possible ChatGPT → Joy-Con → Switch control path, without pretending a connection worked when it didn't.</p>
 <section class="panel"><h2>1. Browser API scan</h2><div id="checks" class="muted">Scanning…</div><div class="actions" style="margin-top:12px"><button id="refresh">Rescan APIs</button><button id="gamepad">Check gamepads</button></div><p class="muted">A Joy-Con paired to the Switch is normally communicating with the Switch, not this phone. A browser can only detect devices exposed to it by Android and the browser.</p></section>
 <section class="panel"><h2>2. Live Gamepad API monitor</h2><p>Connect or pair a controller to the phone, keep this page visible, then press a button or move a stick. This reads controller input for this webpage only.</p><div class="term"><pre id="padout">Waiting for controller input…</pre></div><p class="muted">Important: this can read a controller that Android/browser exposes to the page. It cannot read the Joy-Con while it is connected only to the Switch, and it cannot forward button presses into the Switch.</p></section><section class="panel"><h2>3. Can one Joy-Con talk to both phone and Switch?</h2>
