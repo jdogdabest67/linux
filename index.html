@@ -45,6 +45,35 @@ body{padding:0 16px 0 0}main{max-width:1240px;margin:0 auto 0 0;padding:22px 22p
 @media(max-width:760px){body{padding:0 12px}main{padding:12px 0 36px;margin:auto;width:100%}.space-nav{position:sticky;top:0;bottom:auto;width:100%;padding:10px 12px;gap:8px;border:1px solid #29395b;border-radius:0 0 16px 16px;box-shadow:0 8px 24px rgba(0,0,0,.22)}.nav-brand{font-size:1rem;padding:0 3px 4px;border:0}.nav-subtitle{display:none}.mobile-menu-toggle{display:block;align-self:flex-start;padding:8px 12px;background:#142c40;border-color:#287a78;color:#a8f5e2}.nav-links{display:none}.mobile-menu{display:flex;flex-direction:column;gap:6px;padding:6px 0 2px}.mobile-menu[hidden]{display:none}.mobile-menu .nav-link{padding:10px 12px}header{padding:19px 16px;margin:14px 0}header:after{font-size:1rem;right:10px}.panel{padding:15px}}
     /* Keep feature navigation links clean, without browser underlines. */
     a.nav-link, a.nav-link:link, a.nav-link:visited, a.nav-link:hover, a.nav-link:focus { text-decoration: none; }
+
+/* Community controls: keep action buttons together and give expanded replies their own row. */
+.post-interactions{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;align-items:center;gap:8px;margin-top:12px;min-width:0}
+.post-interactions>.small{min-width:0;overflow-wrap:anywhere}
+.post-interactions>.post-comments,.post-interactions>.post-safety{grid-column:1/-1;width:100%;min-width:0}
+.post-comments{border-top:1px solid #344363;padding-top:12px;margin-top:4px}
+.comment-list{display:flex;flex-direction:column;gap:8px;min-width:0}
+.comment-item{padding:10px 12px;border:1px solid #344363;border-radius:11px;background:rgba(8,15,35,.65);overflow-wrap:anywhere}
+.comment-item p{white-space:pre-wrap;overflow-wrap:anywhere;margin:.3rem 0}
+.comment-item time{display:block}
+.post-comments textarea{width:100%;min-width:0}
+.post-comments>.actions{margin-top:6px}
+.post-safety summary{cursor:pointer;color:var(--blue);font-weight:700;padding:7px 0}
+.post-safety button{margin:5px 6px 0 0}
+#blockedUsersList .bubble{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#blockedUsersList .bubble strong{min-width:0;overflow-wrap:anywhere}
+.direct-notifications>.bubble{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
+.direct-notifications>.bubble strong{min-width:0;overflow-wrap:anywhere}
+.direct-notifications>.bubble time{grid-column:1/-1}
+@media(max-width:480px){
+ .post-interactions{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:stretch}
+ .post-interactions>button{width:100%;min-width:0;padding:9px 8px}
+ .post-interactions>.small{grid-column:1/-1}
+ .post-interactions>.post-comments,.post-interactions>.post-safety{grid-column:1/-1}
+ .post-safety button{width:100%;margin:6px 0 0}
+ .direct-notifications>.bubble{grid-template-columns:1fr}
+ .direct-notifications>.bubble time{grid-column:auto}
+ .direct-notifications>.bubble button{width:100%}
+}
 </style></head><body data-current-page="posts"><main>
 <header><span class="eyebrow">A PLACE TO POST, SHARE, AND CONNECT</span><h1>🐶 J-DogBrew Social</h1><p class="small">A place for posts, people, and the occasional suspiciously powerful duck.</p></header>
 <nav class="space-nav" aria-label="Main navigation"><div class="nav-brand"><span class="nav-orbit">🐶</span><span>J-DogBrew</span><span class="nav-subtitle">SOCIAL HUB</span></div><button type="button" class="mobile-menu-toggle" id="mobileMenuToggle" aria-expanded="false" aria-controls="mobileMenu">☰ Menu</button><div class="nav-links" id="desktopNav"><a href="./posts.html" class="nav-link active" data-section="posts">🗞️ Posts</a><a href="./account.html" class="nav-link" data-section="account" data-account-nav>👤 Account</a><a href="./notifications.html" class="nav-link" data-section="notifications">🔔 Notifications</a><a href="./people.html" class="nav-link" data-section="people">🔎 Find people</a><div class="nav-foot">J-DOGBREW SOCIAL<br><span>Status: online-ish</span></div></div><div class="mobile-menu" id="mobileMenu" hidden><a href="./posts.html" class="nav-link active" data-section="posts">🗞️ Posts</a><a href="./account.html" class="nav-link" data-section="account" data-account-nav>👤 Account</a><a href="./notifications.html" class="nav-link" data-section="notifications">🔔 Notifications</a><a href="./people.html" class="nav-link" data-section="people">🔎 Find people</a></div></nav>
