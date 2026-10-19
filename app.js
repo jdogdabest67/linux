@@ -1,46 +1,139 @@
 (() => {
 "use strict";
 const $ = id => document.getElementById(id);
-const MAX_FILE = 10 * 1024 * 1024, MAX_FRAME = 180 * 1024, CLIENT_ID = "joygpt-" + Math.random().toString(36).slice(2,12);
-let socket=null, observed=0, logs=[], rtt=[], feedStream=null, feedRunning=false, feedBusy=false, feedTimer=0, lastFeedUrl=null;
-const pending=new Map(), transfers=new Map(), objectUrls=[];
-function cfg(){const endpoint=$("signalEndpoint").value.trim().replace(/\/+$/,""),session=$("signalSession").value.trim();if(!/^https?:\/\//i.test(endpoint))throw Error("Worker URL must begin with http:// or https://.");if(session.length<4||session.length>64||!/^[a-zA-Z0-9_-]+$/.test(session))throw Error("Session must be 4–64 letters, numbers, underscores, or hyphens.");return{endpoint,session};}
-function role(){return $("deviceRole").value;}function connected(){return !!socket&&socket.readyState===WebSocket.OPEN;}
-function log(line){observed++;logs.push(new Date().toLocaleTimeString()+"  "+line);if(logs.length>100)logs=logs.slice(-100);$("transportLog").textContent=logs.join("\n");$("messageCount").textContent="Messages observed: "+observed;}
-function status(text){$("connectionStatus").textContent=text;$("transportState").textContent="Socket: "+(connected()?"connected as "+role():text);}
-function id(prefix){return prefix+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);}
-function showPayload(kind,payload){return ["text","markdown","reaction","status"].includes(kind)?(typeof payload==="string"?payload:JSON.stringify(payload,null,2)):JSON.stringify(payload,null,2);}
-function addMessage(data){const area=$("chatMessages"),empty=area.querySelector(".empty");if(empty)empty.remove();const bubble=document.createElement("article");bubble.className="bubble"+(data.own?" own":"");const head=document.createElement("div");head.className="bubble-head";const who=document.createElement("span");who.textContent=(data.own?"You · ":"")+(data.fromRole||"browser").toUpperCase()+" · "+String(data.kind||"text").toUpperCase();const time=document.createElement("time");time.textContent=new Date(data.timestamp||Date.now()).toLocaleTimeString();head.append(who,time);const body=document.createElement("div");body.className="bubble-body";body.textContent=showPayload(data.kind,data.payload);bubble.append(head,body);area.append(bubble);while(area.children.length>100)area.firstElementChild.remove();area.scrollTop=area.scrollHeight;}
-function packetBuffer(header,bytes){const meta=new TextEncoder().encode(JSON.stringify(header)),out=new Uint8Array(8+meta.length+bytes.length);out.set([0x4a,0x47,0x50,0x54]);new DataView(out.buffer).setUint32(4,meta.length,false);out.set(meta,8);out.set(bytes,8+meta.length);return out.buffer;}
-async function connect(){const btn=$("connectWebSocket");btn.disabled=true;try{const c=cfg();if(typeof WebSocket!=="function")throw Error("This browser does not expose WebSocket.");disconnect(false);status("Checking Worker version…");const response=await fetch(c.endpoint+"/api/health",{cache:"no-store"}),health=await response.json();if(!response.ok||!health.ok||health.version!=="social-v1"||!health.websocketSupported)throw Error("Worker update needed. Expected social-v1; received "+JSON.stringify(health)+". Deploy worker.js to Cloudflare and retry.");const url=c.endpoint.replace(/^https:/i,"wss:").replace(/^http:/i,"ws:")+"/api/socket?session="+encodeURIComponent(c.session)+"&role="+encodeURIComponent(role())+"&clientId="+encodeURIComponent(CLIENT_ID);status("Opening WebSocket…");const s=new WebSocket(url);socket=s;s.binaryType="arraybuffer";s.addEventListener("open",()=>{if(socket!==s)return;status("Connected as "+role()+". Open the other device with the same room settings.");log("CONNECTED role="+role()+" session="+c.session);});s.addEventListener("message",e=>{if(e.data instanceof ArrayBuffer){receiveBinary(e.data);return;}if(typeof Blob!=="undefined"&&e.data instanceof Blob){e.data.arrayBuffer().then(receiveBinary).catch(err=>log("Binary frame read failed: "+err.message));return;}let d;try{d=JSON.parse(e.data);}catch(_){log("Non-JSON frame "+String(e.data).slice(0,120));return;}if(d.type==="error"){log("SERVER ERROR "+d.error);return;}if(d.type==="message-relay"){const own=d.toClientId===CLIENT_ID;if(own&&pending.has(d.id)){const n=Date.now()-pending.get(d.id);pending.delete(d.id);rtt.push(n);if(rtt.length>50)rtt.shift();$("rttSummary").textContent="Round-trip: min "+Math.min(...rtt)+" ms · avg "+Math.round(rtt.reduce((x,y)=>x+y,0)/rtt.length)+" ms · max "+Math.max(...rtt)+" ms";}addMessage({fromRole:d.fromRole,kind:d.kind,payload:d.payload,own,timestamp:d.sentAt||d.serverReceivedAt});log((own?"ECHO":"PEER")+" ["+d.kind+"] "+JSON.stringify(d.payload).slice(0,180));return;}if(d.type==="relay"){const own=d.toClientId===CLIENT_ID;const sent=pending.get(d.id);if(own&&sent){const n=Date.now()-sent;pending.delete(d.id);rtt.push(n);if(rtt.length>50)rtt.shift();$("rttSummary").textContent="Round-trip: min "+Math.min(...rtt)+" ms · avg "+Math.round(rtt.reduce((x,y)=>x+y,0)/rtt.length)+" ms · max "+Math.max(...rtt)+" ms";}if(String(d.text).startsWith("PING-"))addMessage({fromRole:d.fromRole,kind:"status",payload:d.text,own});log((own?"ECHO":"PEER")+" marker "+d.text);return;}log("Server frame "+JSON.stringify(d).slice(0,180));});s.addEventListener("error",()=>{status("WebSocket error. Check the Worker deployment and network.");log("SOCKET ERROR: connection details hidden by browser.");});s.addEventListener("close",e=>{if(socket===s)socket=null;status("Disconnected. code="+e.code+(e.reason?", "+e.reason:""));log("CLOSED "+e.code+" clean="+e.wasClean);});}catch(e){status("Could not connect: "+e.message);log("CONNECT FAILED "+e.message);}finally{btn.disabled=false;}}
-function disconnect(update=true){if(socket){const old=socket;socket=null;try{old.close(1000,"User disconnected");}catch(_){}}if(update)status("Disconnected by user.");else $("transportState").textContent="Socket: disconnected";}
-function sendTyped(kind,payload){if(!connected()){$("messageStatus").textContent="Connect first.";return false;}const idValue=id("MSG"),wire=JSON.stringify({type:"message",v:1,id:idValue,kind,sentAt:Date.now(),payload});if(new TextEncoder().encode(JSON.stringify(payload)).byteLength>12000||wire.length>16384){$("messageStatus").textContent="Message too large. Keep structured content under 12 KiB.";return false;}try{socket.send(wire);$("messageStatus").textContent="Sent "+kind+". Waiting for echo and peer relay…";log("SENT ["+kind+"] "+JSON.stringify(payload).slice(0,180));return true;}catch(e){$("messageStatus").textContent="Send failed: "+e.message;return false;}}
-function sendMessage(){const kind=$("messageKind").value,raw=$("messageComposer").value.trim();if(!raw){$("messageStatus").textContent="Write something first.";return;}let payload=raw;if(["json","event","meta"].includes(kind)){try{payload=JSON.parse(raw);}catch(_){$("messageStatus").textContent="This format needs valid JSON. Check quotes, braces, and commas.";return;}if(kind!=="json"&&(!payload||typeof payload!=="object"||Array.isArray(payload))){$("messageStatus").textContent=kind+" must be a JSON object.";return;}}if(sendTyped(kind,payload))$("messageComposer").value="";}
-function ping(text){if(!connected()){$("messageStatus").textContent="Connect first.";return;}const pid=id("PING");pending.set(pid,Date.now());try{socket.send(JSON.stringify({type:"probe",id:pid,sentAt:Date.now(),text:String(text).slice(0,200)}));log("SENT ping "+text);}catch(e){pending.delete(pid);$("messageStatus").textContent="Ping failed: "+e.message;}}
-async function sendFile(){if(!connected()){$("fileStatus").textContent="Connect first.";return;}const file=$("fileInput").files&&$("fileInput").files[0];if(!file){$("fileStatus").textContent="Choose a file first.";return;}if(file.size>MAX_FILE){$("fileStatus").textContent="File limit is 10 MB.";return;}const kind=file.type.startsWith("image/")?"image":file.type.startsWith("audio/")?"audio":file.type.startsWith("video/")?"video":"binary",tid=id("FILE"),chunkSize=180*1024,count=Math.max(1,Math.ceil(file.size/chunkSize));try{for(let i=0;i<count;i++){while(connected()&&socket.bufferedAmount>1024*1024)await new Promise(resolve=>setTimeout(resolve,30));if(!connected())throw Error("Socket disconnected during transfer.");const bytes=new Uint8Array(await file.slice(i*chunkSize,Math.min(file.size,(i+1)*chunkSize)).arrayBuffer());socket.send(packetBuffer({type:"packet",v:1,id:tid+"-"+i,transferId:tid,kind,name:file.name.slice(0,200),mimeType:(file.type||"application/octet-stream").slice(0,120),size:file.size,chunkIndex:i,chunkCount:count,senderRole:role(),senderClientId:CLIENT_ID},bytes));$("fileStatus").textContent="Sending "+file.name+": "+(i+1)+"/"+count;await new Promise(resolve=>setTimeout(resolve,5));}log("SENT FILE "+file.name+" ("+file.size+" bytes)");$("fileStatus").textContent="Sent "+file.name+". Check the peer page.";}catch(e){$("fileStatus").textContent="Transfer failed: "+e.message;}}
-function receiveBinary(buffer){try{if(!(buffer instanceof ArrayBuffer)||buffer.byteLength<10||buffer.byteLength>262144)throw Error("Invalid binary frame size.");const b=new Uint8Array(buffer);if(b[0]!==0x4a||b[1]!==0x47||b[2]!==0x50||b[3]!==0x54)throw Error("Unknown JGPT packet.");const hn=new DataView(buffer).getUint32(4,false);if(hn<2||hn>4096||8+hn>b.length)throw Error("Invalid packet header.");const h=JSON.parse(new TextDecoder().decode(b.subarray(8,8+hn)));if(h.type!=="packet"||h.v!==1||typeof h.transferId!=="string"||!Number.isInteger(h.chunkIndex)||!Number.isInteger(h.chunkCount)||h.chunkCount<1||h.chunkCount>1000||h.chunkIndex<0||h.chunkIndex>=h.chunkCount||!Number.isInteger(h.size)||h.size<0||h.size>MAX_FILE)throw Error("Invalid metadata.");let t=transfers.get(h.transferId);if(!t){t={header:h,chunks:new Array(h.chunkCount),received:0,bytes:0};transfers.set(h.transferId,t);}if(t.header.chunkCount!==h.chunkCount||t.header.size!==h.size||t.header.name!==h.name||t.header.mimeType!==h.mimeType||t.header.channel!==h.channel||t.header.senderClientId!==h.senderClientId){transfers.delete(h.transferId);throw Error("Packet metadata changed.");}if(!t.chunks[h.chunkIndex]){const chunk=b.slice(8+hn);t.chunks[h.chunkIndex]=chunk;t.received++;t.bytes+=chunk.length;}if(t.received!==h.chunkCount)return;transfers.delete(h.transferId);if(t.bytes!==h.size)throw Error("Received length mismatch.");const blob=new Blob(t.chunks,{type:h.mimeType||"application/octet-stream"});if(h.channel==="livefeed-v0.1"){if(h.senderClientId===CLIENT_ID)return;if(h.kind!=="image"||blob.size>MAX_FRAME)throw Error("Invalid live frame.");showRemoteFeed(blob,h);return;}showFile(h,blob);}catch(e){log("BINARY ERROR "+e.message);$("fileStatus").textContent="Binary receive error: "+e.message;}}
-function showFile(h,blob){const card=document.createElement("div");card.className="file-card";const title=document.createElement("div");title.textContent=(h.name||"file")+" · "+h.kind+" · "+blob.size.toLocaleString()+" bytes · "+(h.senderRole||"peer");const url=URL.createObjectURL(blob);objectUrls.push(url);while(objectUrls.length>20)URL.revokeObjectURL(objectUrls.shift());const link=document.createElement("a");link.href=url;link.download=h.name||"joygpt-file.bin";link.textContent="Download received file";card.append(title,document.createElement("br"),link);if(h.kind==="image"&&blob.size<3000000){const image=document.createElement("img");image.src=url;image.alt=h.name||"Received image";image.style.maxHeight="260px";card.append(document.createElement("br"),image);}else if(h.kind==="audio"||h.kind==="video"){const player=document.createElement(h.kind);player.src=url;player.controls=true;player.style.display="block";player.style.width="100%";card.append(player);} $("receivedFiles").prepend(card);while($("receivedFiles").children.length>8)$("receivedFiles").lastElementChild.remove();$("fileStatus").textContent="Received "+(h.name||"file")+" ("+blob.size.toLocaleString()+" bytes).";log("RECEIVED FILE "+(h.name||"file")+" "+blob.size+" bytes");}
-function showRemoteFeed(blob,h){if(lastFeedUrl)URL.revokeObjectURL(lastFeedUrl);lastFeedUrl=URL.createObjectURL(blob);$("remoteFeedImage").src=lastFeedUrl;$("remoteFeedImage").hidden=false;$("remoteFeedPlaceholder").hidden=true;$("remoteFeedStatus").textContent="Latest frame "+new Date(h.frameAt||Date.now()).toLocaleTimeString()+" · "+blob.size.toLocaleString()+" bytes";$("feedStatus").textContent="Receiving Live Feed v0.1 from "+(h.senderRole||"peer")+". Snapshot stream, not continuous video.";log("LIVE FRAME from "+(h.senderRole||"peer")+" "+blob.size+" bytes");}
-function toBlob(canvas,q){return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error("JPEG encoding failed.")),"image/jpeg",q));}
-async function captureFrame(){if(!connected())throw Error("Connect messaging first.");if(!feedStream)throw Error("Start camera first.");const video=$("localFeedVideo");if(!video.videoWidth||!video.videoHeight)throw Error("Camera is starting; try again.");const quality=$("feedQuality").value,limit=quality==="sharp"?640:quality==="small"?320:480,q=quality==="sharp"?.55:quality==="small"?.28:.38;const canvas=document.createElement("canvas"),scale=Math.min(1,limit/video.videoWidth);canvas.width=Math.max(1,Math.round(video.videoWidth*scale));canvas.height=Math.max(1,Math.round(video.videoHeight*scale));canvas.getContext("2d",{alpha:false}).drawImage(video,0,0,canvas.width,canvas.height);let blob=await toBlob(canvas,q);if(blob.size>MAX_FRAME){canvas.width=Math.round(canvas.width*.75);canvas.height=Math.round(canvas.height*.75);canvas.getContext("2d",{alpha:false}).drawImage(video,0,0,canvas.width,canvas.height);blob=await toBlob(canvas,.22);}if(blob.size>MAX_FRAME)throw Error("Frame exceeds 180 KiB after compression and was skipped.");if(!connected())throw Error("Socket disconnected.");const bytes=new Uint8Array(await blob.arrayBuffer()),transferId=id("LIVE"),at=Date.now();socket.send(packetBuffer({type:"packet",v:1,id:transferId,transferId,kind:"image",name:"joygpt-live-frame.jpg",mimeType:"image/jpeg",size:bytes.length,chunkIndex:0,chunkCount:1,channel:"livefeed-v0.1",senderRole:role(),senderClientId:CLIENT_ID,frameAt:at,width:canvas.width,height:canvas.height},bytes));$("localFeedStatus").textContent="Sent "+new Date(at).toLocaleTimeString()+" · "+bytes.length.toLocaleString()+" bytes · "+canvas.width+"×"+canvas.height;log("SENT LIVE FRAME "+canvas.width+"×"+canvas.height+" "+bytes.length+" bytes");}
-async function feedLoop(){if(!feedRunning||feedBusy)return;feedBusy=true;try{await captureFrame();}catch(e){$("feedStatus").textContent="Feed frame skipped: "+e.message;log("FEED "+e.message);}finally{feedBusy=false;if(feedRunning)feedTimer=setTimeout(feedLoop,1100);}}
-async function startFeed(){if(!connected()){$("feedStatus").textContent="Connect messaging first.";return;}if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){$("feedStatus").textContent="Camera API unavailable in this browser.";return;}try{$("startLiveFeed").disabled=true;$("feedStatus").textContent="Requesting camera permission…";feedStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:$("cameraFacing").value},width:{ideal:640},height:{ideal:360},frameRate:{ideal:5,max:10}}});const video=$("localFeedVideo");video.srcObject=feedStream;video.hidden=false;$("localFeedPlaceholder").hidden=true;await video.play();feedRunning=true;$("stopLiveFeed").disabled=false;$("feedStatus").textContent="Live Feed v0.1 running. Sending compressed JPEG snapshots about once per second. No audio.";log("LIVE FEED STARTED");await feedLoop();}catch(e){stopFeed();$("feedStatus").textContent="Could not start camera: "+e.name+": "+e.message;}finally{$("startLiveFeed").disabled=false;}}
-function stopFeed(){feedRunning=false;feedBusy=false;if(feedTimer)clearTimeout(feedTimer);feedTimer=0;if(feedStream)feedStream.getTracks().forEach(t=>t.stop());feedStream=null;$("localFeedVideo").srcObject=null;$("localFeedVideo").hidden=true;$("localFeedPlaceholder").hidden=false;$("stopLiveFeed").disabled=true;$("startLiveFeed").disabled=false;$("localFeedStatus").textContent="Camera off.";$("feedStatus").textContent="Live Feed v0.1 stopped. Camera tracks are off.";log("LIVE FEED STOPPED");}
-async function oneFrame(){if(!connected()){$("feedStatus").textContent="Connect first.";return;}let temporary=false;if(!feedStream){try{feedStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:$("cameraFacing").value},width:{ideal:640},height:{ideal:360}}});const v=$("localFeedVideo");v.srcObject=feedStream;v.hidden=false;$("localFeedPlaceholder").hidden=true;await v.play();temporary=true;}catch(e){$("feedStatus").textContent="Camera unavailable: "+e.message;return;}}try{await captureFrame();$("feedStatus").textContent="One snapshot sent.";}catch(e){$("feedStatus").textContent="Frame failed: "+e.message;}finally{if(temporary){feedStream.getTracks().forEach(t=>t.stop());feedStream=null;$("localFeedVideo").srcObject=null;$("localFeedVideo").hidden=true;$("localFeedPlaceholder").hidden=false;}}}
-function burst(){if(!connected()){$("messageStatus").textContent="Connect first.";return;}for(let i=1;i<=10;i++)setTimeout(()=>{if(connected())ping("PING-"+i+"-of-10");},(i-1)*160);$("messageStatus").textContent="Sent 10 ping markers; check echoes and latency.";}
-function copyLog(){const text=logs.join("\n");if(!text){status("No log to copy.");return;}if(!navigator.clipboard||!navigator.clipboard.writeText){status("Clipboard unavailable; select the log and copy manually.");return;}navigator.clipboard.writeText(text).then(()=>status("Transport log copied."),()=>status("Clipboard blocked; select log and copy manually."));}
-$("connectWebSocket").addEventListener("click",connect);$("disconnectWebSocket").addEventListener("click",()=>{stopFeed();disconnect();});$("sendMessage").addEventListener("click",sendMessage);$("messageComposer").addEventListener("keydown",e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();sendMessage();}});$("quickPing").addEventListener("click",()=>ping("PING-"+Date.now()));$("sendFile").addEventListener("click",sendFile);$("startLiveFeed").addEventListener("click",startFeed);$("stopLiveFeed").addEventListener("click",stopFeed);$("sendOneFrame").addEventListener("click",oneFrame);$("runPingBurst").addEventListener("click",burst);$("copyLog").addEventListener("click",copyLog);$("clearChat").addEventListener("click",()=>{const area=$("chatMessages");area.replaceChildren();const empty=document.createElement("div");empty.className="empty";empty.textContent="Chat cleared locally only.";area.append(empty);});window.addEventListener("pagehide",()=>{stopFeed();disconnect(false);objectUrls.forEach(URL.revokeObjectURL);if(lastFeedUrl)URL.revokeObjectURL(lastFeedUrl);});
-const ACCOUNT_TOKEN_KEY="jdogbrew-social-token-v1";
-let accountToken=localStorage.getItem(ACCOUNT_TOKEN_KEY)||"", signedInUser=null;
-async function api(path,options={}){const c=cfg();const headers={"Content-Type":"application/json",...(options.headers||{})};if(accountToken)headers.Authorization="Bearer "+accountToken;const res=await fetch(c.endpoint+path,{...options,headers});let data;try{data=await res.json();}catch(_){throw Error("Server returned an unreadable response.");}if(!res.ok||data.ok===false)throw Error(data.error||("Request failed ("+res.status+")."));return data;}
-function setAccount(user){signedInUser=user;const line=$("accountStatus");line.textContent=user?"Signed in as @"+user.username+". Regular account.":"Not signed in."; $("logoutAccount").disabled=!user; $("publishPost").disabled=!user;}
-async function restoreAccount(){if(!accountToken){setAccount(null);return;}try{const d=await api("/api/me");setAccount(d.user);}catch(_){accountToken="";localStorage.removeItem(ACCOUNT_TOKEN_KEY);setAccount(null);}}
-async function accountAction(mode){const username=$("accountUsername").value.trim(),password=$("accountPassword").value;const statusEl=$("accountStatus");if(!username||!password){statusEl.textContent="Enter a username and password first.";return;}try{statusEl.textContent=mode==="register"?"Creating account…":"Signing in…";const d=await api(mode==="register"?"/api/register":"/api/login",{method:"POST",body:JSON.stringify({username,password})});accountToken=d.token;localStorage.setItem(ACCOUNT_TOKEN_KEY,accountToken);setAccount(d.user);$("accountPassword").value="";statusEl.textContent="Welcome, @"+d.user.username+"! Regular account ready.";await loadPosts();}catch(e){statusEl.textContent=e.message;}}
-function escapeText(s){return String(s).replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));}
-async function loadPosts(){const area=$("postFeed");try{const d=await api("/api/posts");area.replaceChildren();if(!d.posts.length){const empty=document.createElement("div");empty.className="empty";empty.textContent="No posts yet. This is your chance to publish the first one!";area.append(empty);return;}for(const post of d.posts){const card=document.createElement("article");card.className="bubble";const head=document.createElement("div");head.className="bubble-head";const who=document.createElement("strong");who.textContent="@"+post.username;const time=document.createElement("time");time.textContent=new Date(post.createdAt).toLocaleString();head.append(who,time);const body=document.createElement("div");body.className="bubble-body";body.textContent=post.content;card.append(head,body);area.append(card);}}catch(e){area.replaceChildren();const empty=document.createElement("div");empty.className="empty";empty.textContent="Couldn't load posts: "+e.message;area.append(empty);}}
-async function publishPost(){if(!signedInUser){$("postStatus").textContent="Sign in first to publish.";return;}const content=$("postComposer").value.trim();if(!content){$("postStatus").textContent="Write something first.";return;}try{$("publishPost").disabled=true;$("postStatus").textContent="Publishing…";await api("/api/posts",{method:"POST",body:JSON.stringify({content})});$("postComposer").value="";$("postStatus").textContent="Posted! Saved permanently on the server.";await loadPosts();}catch(e){$("postStatus").textContent=e.message;}finally{$("publishPost").disabled=!signedInUser;}}
-$("registerAccount").addEventListener("click",()=>accountAction("register"));$("loginAccount").addEventListener("click",()=>accountAction("login"));$("logoutAccount").addEventListener("click",()=>{accountToken="";localStorage.removeItem(ACCOUNT_TOKEN_KEY);setAccount(null);$("accountStatus").textContent="Signed out on this device.";});$("publishPost").addEventListener("click",publishPost);$("refreshPosts").addEventListener("click",loadPosts);$("cameraFacing").addEventListener("change",async()=>{if(!feedRunning)return;const wasRunning=feedRunning;stopFeed();if(wasRunning)await startFeed();});
-$("logoutAccount").disabled=true;$("publishPost").disabled=true;restoreAccount();loadPosts();
+const API_BASE = "https://joygpt-signal-bridge.jdogdabest67.workers.dev";
+const ACCOUNT_TOKEN_KEY = "jdogbrew-social-token-v1";
+let accountToken = localStorage.getItem(ACCOUNT_TOKEN_KEY) || "";
+let signedInUser = null;
 
-log("Messaging Lab ready. Connect both devices with the same Worker URL and session.");
+async function api(path, options = {}) {
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (accountToken) headers.Authorization = "Bearer " + accountToken;
+  const response = await fetch(API_BASE + path, { ...options, headers, cache: "no-store" });
+  let data;
+  try { data = await response.json(); }
+  catch (_) { throw Error("Server returned an unreadable response."); }
+  if (!response.ok || data.ok === false) throw Error(data.error || ("Request failed (" + response.status + ")."));
+  return data;
+}
+
+function setAccount(user) {
+  signedInUser = user;
+  $("accountStatus").textContent = user ? "Signed in as @" + user.username + "." : "Not signed in.";
+  $("logoutAccount").disabled = !user;
+  $("publishPost").disabled = !user;
+}
+
+async function restoreAccount() {
+  if (!accountToken) { setAccount(null); return; }
+  try {
+    const data = await api("/api/me");
+    setAccount(data.user);
+  } catch (_) {
+    accountToken = "";
+    localStorage.removeItem(ACCOUNT_TOKEN_KEY);
+    setAccount(null);
+  }
+}
+
+async function accountAction(mode) {
+  const username = $("accountUsername").value.trim();
+  const password = $("accountPassword").value;
+  const status = $("accountStatus");
+  if (!username || !password) {
+    status.textContent = "Enter a username and password first.";
+    return;
+  }
+  try {
+    status.textContent = mode === "register" ? "Creating account…" : "Signing in…";
+    const data = await api(mode === "register" ? "/api/register" : "/api/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password })
+    });
+    accountToken = data.token;
+    localStorage.setItem(ACCOUNT_TOKEN_KEY, accountToken);
+    setAccount(data.user);
+    $("accountPassword").value = "";
+    status.textContent = "Welcome, @" + data.user.username + "!";
+    await loadPosts();
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
+async function loadPosts() {
+  const area = $("postFeed");
+  try {
+    const data = await api("/api/posts");
+    area.replaceChildren();
+    if (!data.posts.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "No posts yet. Be the first to publish one!";
+      area.append(empty);
+      return;
+    }
+    for (const post of data.posts) {
+      const card = document.createElement("article");
+      card.className = "bubble";
+      const head = document.createElement("div");
+      head.className = "bubble-head";
+      const who = document.createElement("strong");
+      who.textContent = "@" + post.username;
+      const time = document.createElement("time");
+      time.textContent = new Date(post.createdAt).toLocaleString();
+      head.append(who, time);
+      const body = document.createElement("div");
+      body.className = "bubble-body";
+      body.textContent = post.content;
+      card.append(head, body);
+      area.append(card);
+    }
+  } catch (error) {
+    area.replaceChildren();
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "Couldn't load posts: " + error.message;
+    area.append(empty);
+  }
+}
+
+async function publishPost() {
+  if (!signedInUser) {
+    $("postStatus").textContent = "Sign in first to publish.";
+    return;
+  }
+  const content = $("postComposer").value.trim();
+  if (!content) {
+    $("postStatus").textContent = "Write something first.";
+    return;
+  }
+  try {
+    $("publishPost").disabled = true;
+    $("postStatus").textContent = "Publishing…";
+    await api("/api/posts", { method: "POST", body: JSON.stringify({ content }) });
+    $("postComposer").value = "";
+    $("postStatus").textContent = "Posted! Saved on the server.";
+    await loadPosts();
+  } catch (error) {
+    $("postStatus").textContent = error.message;
+  } finally {
+    $("publishPost").disabled = !signedInUser;
+  }
+}
+
+$("registerAccount").addEventListener("click", () => accountAction("register"));
+$("loginAccount").addEventListener("click", () => accountAction("login"));
+$("logoutAccount").addEventListener("click", () => {
+  accountToken = "";
+  localStorage.removeItem(ACCOUNT_TOKEN_KEY);
+  setAccount(null);
+  $("accountStatus").textContent = "Signed out on this device.";
+});
+$("publishPost").addEventListener("click", publishPost);
+$("refreshPosts").addEventListener("click", loadPosts);
+$("logoutAccount").disabled = true;
+$("publishPost").disabled = true;
+restoreAccount();
+loadPosts();
 })();
