@@ -1,6 +1,6 @@
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
   "Cache-Control": "no-store"
 };
@@ -58,7 +58,7 @@ export default {
     }
 
     if (["/api/register", "/api/login", "/api/me", "/api/posts", "/api/profile", "/api/follow"].includes(url.pathname) ||
-        url.pathname.startsWith("/api/profile/")) {
+        url.pathname.startsWith("/api/profile/") || url.pathname.startsWith("/api/posts/")) {
       const stub = env.SIGNAL_STORE.get(env.SIGNAL_STORE.idFromName("jdogbrew-social-data-v1"));
       return ensureCors(await stub.fetch(new Request("https://social-store.internal" + url.pathname + url.search, request)));
     }
@@ -142,6 +142,21 @@ export class SignalStore {
       const posts = (await this.ctx.storage.get("social-posts")) || [];
       return json({ ok: true, posts: posts.slice(-100).reverse() });
     }
+    if (url.pathname.startsWith("/api/posts/") && request.method === "DELETE") {
+      const user = await this.authUser(request);
+      if (!user) return json({ ok: false, error: "Sign in required to delete a post." }, 401);
+      const postId = decodeURIComponent(url.pathname.slice("/api/posts/".length));
+      if (!postId || postId.length > 100) return json({ ok: false, error: "Invalid post ID." }, 400);
+      const posts = (await this.ctx.storage.get("social-posts")) || [];
+      const post = posts.find(item => String(item.id) === postId);
+      if (!post) return json({ ok: false, error: "Post not found. Refresh the feed and try again." }, 404);
+      if (String(post.username).toLowerCase() !== user.username.toLowerCase()) {
+        return json({ ok: false, error: "You can only delete your own posts." }, 403);
+      }
+      await this.ctx.storage.put("social-posts", posts.filter(item => String(item.id) !== postId));
+      return json({ ok: true, deletedId: postId });
+    }
+
     if (url.pathname === "/api/posts" && request.method === "POST") {
       const user = await this.authUser(request);
       if (!user) return json({ ok: false, error: "Sign in required to post." }, 401);
