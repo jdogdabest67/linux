@@ -58,7 +58,7 @@ export default {
     }
 
     if (["/api/register", "/api/login", "/api/me", "/api/posts", "/api/profile", "/api/follow"].includes(url.pathname) ||
-        url.pathname.startsWith("/api/profile/") || url.pathname.startsWith("/api/posts/")) {
+        url.pathname.startsWith("/api/profile/") || url.pathname.startsWith("/api/posts/") || url.pathname.startsWith("/api/comments") || url.pathname.startsWith("/api/reactions") || url.pathname.startsWith("/api/reports") || url.pathname.startsWith("/api/blocks") || url.pathname.startsWith("/api/notifications")) {
       const stub = env.SIGNAL_STORE.get(env.SIGNAL_STORE.idFromName("jdogbrew-social-data-v1"));
       return ensureCors(await stub.fetch(new Request("https://social-store.internal" + url.pathname + url.search, request)));
     }
@@ -138,9 +138,23 @@ export class SignalStore {
       return this.profileResponse(username, viewer ? viewer.username : "");
     }
     if (url.pathname === "/api/follow" && request.method === "POST") return this.followUser(request);
+    if (url.pathname === "/api/comments" && request.method === "GET") return this.getComments(request);
+    if (url.pathname === "/api/comments" && request.method === "POST") return this.addComment(request);
+    if (url.pathname === "/api/reactions" && request.method === "GET") return this.getReactions(request);
+    if (url.pathname === "/api/reactions" && request.method === "POST") return this.toggleReaction(request);
+    if (url.pathname === "/api/reports" && request.method === "POST") return this.reportPost(request);
+    if (url.pathname === "/api/blocks" && request.method === "GET") return this.getBlocks(request);
+    if (url.pathname === "/api/blocks" && request.method === "POST") return this.toggleBlock(request);
+    if (url.pathname === "/api/notifications" && request.method === "GET") return this.getNotifications(request);
+    if (url.pathname === "/api/notifications/read" && request.method === "POST") return this.markNotificationsRead(request);
     if (url.pathname === "/api/posts" && request.method === "GET") {
       const posts = (await this.ctx.storage.get("social-posts")) || [];
-      return json({ ok: true, posts: posts.slice(-100).reverse() });
+      const viewer = await this.authUser(request);
+      const blocks = (await this.ctx.storage.get("social-blocks")) || {};
+      const blocked = viewer ? new Set(blocks[viewer.username.toLowerCase()] || []) : new Set();
+      const blockedBy = viewer ? new Set(Object.keys(blocks).filter(key => (blocks[key] || []).includes(viewer.username.toLowerCase()))) : new Set();
+      const visible = posts.filter(post => !blocked.has(String(post.username).toLowerCase()) && !blockedBy.has(String(post.username).toLowerCase()));
+      return json({ ok: true, posts: visible.slice(-100).reverse() });
     }
     if (url.pathname.startsWith("/api/posts/") && request.method === "DELETE") {
       const user = await this.authUser(request);
@@ -248,6 +262,130 @@ export class SignalStore {
     };
     await this.ctx.storage.put("social-profiles", profiles);
     return this.profileResponse(user.username, user.username);
+  }
+
+  async getComments(request) {
+    const postId = new URL(request.url).searchParams.get("postId") || "";
+    if (!postId || postId.length > 100) return json({ok:false,error:"A valid post ID is required."},400);
+    const posts = (await this.ctx.storage.get("social-posts")) || [];
+    if (!posts.some(post => String(post.id) === postId)) return json({ok:false,error:"Post not found."},404);
+    const comments = (await this.ctx.storage.get("social-comments")) || [];
+    const blocks = (await this.ctx.storage.get("social-blocks")) || {};
+    const viewer = await this.authUser(request);
+    const blocked = viewer ? new Set(blocks[viewer.username.toLowerCase()] || []) : new Set();
+    const blockedBy = viewer ? new Set(Object.keys(blocks).filter(key => (blocks[key] || []).includes(viewer.username.toLowerCase()))) : new Set();
+    return json({ok:true,comments:comments.filter(item => item.postId === postId && !blocked.has(item.username.toLowerCase()) && !blockedBy.has(item.username.toLowerCase())).slice(-100)});
+  }
+
+  async addComment(request) {
+    const user = await this.authUser(request);
+    if (!user) return json({ok:false,error:"Sign in required to reply."},401);
+    let body; try { body = await request.json(); } catch { return json({ok:false,error:"Expected JSON."},400); }
+    const postId = typeof body.postId === "string" ? body.postId : "";
+    const content = typeof body.content === "string" ? body.content.trim() : "";
+    if (!postId || postId.length > 100 || !content || content.length > 500) return json({ok:false,error:"Replies must contain 1–500 characters."},400);
+    const posts = (await this.ctx.storage.get("social-posts")) || [];
+    const post = posts.find(item => String(item.id) === postId);
+    if (!post) return json({ok:false,error:"Post not found."},404);
+    const blocks = (await this.ctx.storage.get("social-blocks")) || {};
+    if ((blocks[user.username.toLowerCase()] || []).includes(String(post.username).toLowerCase()) || (blocks[String(post.username).toLowerCase()] || []).includes(user.username.toLowerCase())) return json({ok:false,error:"Replies aren't available between blocked accounts."},403);
+    const comments = (await this.ctx.storage.get("social-comments")) || [];
+    const comment = {id:crypto.randomUUID(),postId,username:user.username,content,createdAt:Date.now()};
+    comments.push(comment); await this.ctx.storage.put("social-comments",comments.slice(-5000));
+    if (String(post.username).toLowerCase() !== user.username.toLowerCase()) await this.addNotification(post.username,{id:crypto.randomUUID(),type:"reply",actor:user.username,postId,commentId:comment.id,createdAt:Date.now(),read:false});
+    return json({ok:true,comment},201);
+  }
+
+  async getReactions(request) {
+    const postId = new URL(request.url).searchParams.get("postId") || "";
+    if (!postId || postId.length > 100) return json({ok:false,error:"A valid post ID is required."},400);
+    const posts = (await this.ctx.storage.get("social-posts")) || [];
+    if (!posts.some(post => String(post.id) === postId)) return json({ok:false,error:"Post not found."},404);
+    const reactions = (await this.ctx.storage.get("social-reactions")) || {};
+    const viewer = await this.authUser(request), list = reactions[postId] || [];
+    return json({ok:true,count:list.length,reacted:!!viewer && list.some(name=>name.toLowerCase()===viewer.username.toLowerCase())});
+  }
+
+  async toggleReaction(request) {
+    const user = await this.authUser(request);
+    if (!user) return json({ok:false,error:"Sign in required to react."},401);
+    let body; try { body = await request.json(); } catch { return json({ok:false,error:"Expected JSON."},400); }
+    const postId = typeof body.postId === "string" ? body.postId : "";
+    const posts = (await this.ctx.storage.get("social-posts")) || [];
+    const post = posts.find(item=>String(item.id)===postId);
+    if (!post) return json({ok:false,error:"Post not found."},404);
+    const reactions = (await this.ctx.storage.get("social-reactions")) || {};
+    const list = new Set(reactions[postId] || []), key=user.username.toLowerCase();
+    const already = Array.from(list).some(name=>name.toLowerCase()===key);
+    if (already) { for (const name of list) if (name.toLowerCase()===key) list.delete(name); }
+    else {
+      list.add(user.username);
+      if (String(post.username).toLowerCase() !== key) await this.addNotification(post.username,{id:crypto.randomUUID(),type:"reaction",actor:user.username,postId,createdAt:Date.now(),read:false});
+    }
+    reactions[postId]=Array.from(list); await this.ctx.storage.put("social-reactions",reactions);
+    return json({ok:true,count:list.size,reacted:!already});
+  }
+
+  async reportPost(request) {
+    const user = await this.authUser(request);
+    if (!user) return json({ok:false,error:"Sign in required to report a post."},401);
+    let body; try { body = await request.json(); } catch { return json({ok:false,error:"Expected JSON."},400); }
+    const postId = typeof body.postId === "string" ? body.postId : "", reason = typeof body.reason === "string" ? body.reason.trim().slice(0,300) : "";
+    if (!postId || !reason) return json({ok:false,error:"Choose a reason for the report."},400);
+    const posts = (await this.ctx.storage.get("social-posts")) || [];
+    if (!posts.some(post=>String(post.id)===postId)) return json({ok:false,error:"Post not found."},404);
+    const reports = (await this.ctx.storage.get("social-reports")) || [];
+    if (reports.some(report=>report.postId===postId && report.reporter.toLowerCase()===user.username.toLowerCase())) return json({ok:false,error:"You've already reported this post."},409);
+    reports.push({id:crypto.randomUUID(),postId,reporter:user.username,reason,createdAt:Date.now(),status:"new"});
+    await this.ctx.storage.put("social-reports",reports.slice(-2000));
+    return json({ok:true,message:"Report submitted for review."},201);
+  }
+
+  async getBlocks(request) {
+    const user = await this.authUser(request);
+    if (!user) return json({ok:false,error:"Sign in required."},401);
+    const blocks = (await this.ctx.storage.get("social-blocks")) || {};
+    return json({ok:true,users:blocks[user.username.toLowerCase()] || []});
+  }
+
+  async toggleBlock(request) {
+    const user = await this.authUser(request);
+    if (!user) return json({ok:false,error:"Sign in required to manage blocked accounts."},401);
+    let body; try { body = await request.json(); } catch { return json({ok:false,error:"Expected JSON."},400); }
+    const target = typeof body.username === "string" ? body.username.trim() : "", action=body.action;
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(target) || !["block","unblock"].includes(action)) return json({ok:false,error:"Invalid block request."},400);
+    const key=user.username.toLowerCase(), targetKey=target.toLowerCase();
+    if (key===targetKey) return json({ok:false,error:"You can't block yourself."},400);
+    const users = (await this.ctx.storage.get("social-users")) || {};
+    if (!users[targetKey]) return json({ok:false,error:"User not found."},404);
+    const blocks = (await this.ctx.storage.get("social-blocks")) || {}, list=new Set(blocks[key] || []);
+    if (action==="block") list.add(targetKey); else list.delete(targetKey);
+    blocks[key]=Array.from(list); await this.ctx.storage.put("social-blocks",blocks);
+    return json({ok:true,users:blocks[key]});
+  }
+
+  async addNotification(username, notification) {
+    const key=String(username).toLowerCase(), all=(await this.ctx.storage.get("social-notifications")) || {}, list=all[key] || [];
+    const duplicate=list.some(item=>!item.read && item.type===notification.type && item.postId===notification.postId && item.actor.toLowerCase()===notification.actor.toLowerCase());
+    if (!duplicate) list.push(notification);
+    all[key]=list.slice(-200); await this.ctx.storage.put("social-notifications",all);
+  }
+
+  async getNotifications(request) {
+    const user=await this.authUser(request);
+    if (!user) return json({ok:false,error:"Sign in required."},401);
+    const all=(await this.ctx.storage.get("social-notifications")) || {}, list=all[user.username.toLowerCase()] || [];
+    return json({ok:true,notifications:list.slice(-100).reverse(),unread:list.filter(item=>!item.read).length});
+  }
+
+  async markNotificationsRead(request) {
+    const user=await this.authUser(request);
+    if (!user) return json({ok:false,error:"Sign in required."},401);
+    const all=(await this.ctx.storage.get("social-notifications")) || {}, key=user.username.toLowerCase(), list=all[key] || [];
+    const now=new Set(list.slice(-100).map(item=>item.id));
+    all[key]=list.map(item=>now.has(item.id)?{...item,read:true}:item);
+    await this.ctx.storage.put("social-notifications",all);
+    return json({ok:true});
   }
 
   async followUser(request) {
