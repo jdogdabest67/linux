@@ -28,6 +28,7 @@ function setAccount(user) {
   $("publishPost").disabled = !user;
   $("saveProfile").disabled = !user;
   $("clearAvatar").disabled = !user;
+  updateNotificationStatus();
 }
 async function restoreAccount() {
   if (!accountToken) { setAccount(null); return; }
@@ -105,7 +106,8 @@ function renderProfile(p) {
       button.disabled = true;
       try {
         const result = await api("/api/follow", {method:"POST",body:JSON.stringify({username:p.username,action:p.isFollowing?"unfollow":"follow"})});
-        renderProfile(result.profile); await loadMyProfile();
+        updateLocalFollow(p.username, !p.isFollowing);
+        renderProfile(result.profile); await loadMyProfile(); renderNotifications();
       } catch(e) { $("profileResult").append(document.createTextNode(e.message)); }
       finally { button.disabled = false; }
     });
@@ -215,10 +217,73 @@ function renderPosts() {
     area.append(card);
   }
 }
+const FOLLOWED_USERS_KEY = "jdogbrew-follow-notifications-users-v1";
+const SEEN_NOTIFICATION_KEYS = "jdogbrew-follow-notifications-seen-v1";
+function readLocalList(key) {
+  try { const value=JSON.parse(localStorage.getItem(key)||"[]"); return Array.isArray(value)?value:[]; }
+  catch (_) { return []; }
+}
+function updateLocalFollow(username, following) {
+  const users=readLocalList(FOLLOWED_USERS_KEY), lower=String(username).toLowerCase();
+  const next=users.filter(name=>String(name).toLowerCase()!==lower);
+  if (following) next.push(username);
+  localStorage.setItem(FOLLOWED_USERS_KEY,JSON.stringify(next));
+  if (following) {
+    const seen=readLocalList(SEEN_NOTIFICATION_KEYS);
+    cachedPosts.filter(post=>String(post.username).toLowerCase()===lower).forEach(post=>seen.push(postKey(post)));
+    localStorage.setItem(SEEN_NOTIFICATION_KEYS,JSON.stringify([...new Set(seen)]));
+  }
+  updateNotificationStatus();
+}
+function updateNotificationStatus() {
+  const status=$("notificationStatus"); if (!status) return;
+  if (!signedInUser) { status.textContent="Sign in and follow people to start seeing updates here."; return; }
+  const users=readLocalList(FOLLOWED_USERS_KEY);
+  status.textContent=users.length ? "Watching posts from: "+users.map(name=>"@"+name).join(", ")+". Updates are checked when the feed refreshes." : "Follow someone from Find people to start tracking their new posts on this device.";
+}
+function renderNotifications() {
+  const area=$("notificationFeed"); if (!area) return;
+  area.replaceChildren();
+  const users=readLocalList(FOLLOWED_USERS_KEY).map(name=>String(name).toLowerCase());
+  const seen=new Set(readLocalList(SEEN_NOTIFICATION_KEYS));
+  if (!signedInUser || !users.length) {
+    const empty=document.createElement("div"); empty.className="empty"; empty.textContent=!signedInUser ? "Sign in to see updates from followed accounts." : "No followed accounts tracked yet. Find a person and follow them first.";
+    area.append(empty); updateNotificationStatus(); return;
+  }
+  const followedPosts=cachedPosts.filter(post=>users.includes(String(post.username).toLowerCase())).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  const unread=followedPosts.filter(post=>!seen.has(postKey(post)));
+  if (!unread.length) {
+    const empty=document.createElement("div"); empty.className="empty"; empty.textContent="You're all caught up. No new posts from the people you follow."; area.append(empty);
+    updateNotificationStatus(); return;
+  }
+  unread.forEach(post=>{
+    const card=document.createElement("article"); card.className="bubble";
+    const head=document.createElement("div"); head.className="bubble-head";
+    const who=document.createElement("strong"); who.textContent="@"+post.username+" posted";
+    const time=document.createElement("time"); time.textContent=new Date(post.createdAt).toLocaleString();
+    head.append(who,time);
+    const body=document.createElement("div"); body.className="bubble-body"; body.textContent=getPostExtras(post.content||"").text;
+    card.append(head,body);
+    const extras=getPostExtras(post.content||"").extras;
+    if (extras && extras.imageUrl) {
+      try { const url=new URL(extras.imageUrl); if (["http:","https:"].includes(url.protocol)) { const image=document.createElement("img"); image.className="post-media"; image.loading="lazy"; image.alt="Image attached to post"; image.src=url.href; card.append(image); } } catch (_) {}
+    }
+    area.append(card);
+  });
+  updateNotificationStatus();
+}
+function markNotificationsSeen() {
+  const users=readLocalList(FOLLOWED_USERS_KEY).map(name=>String(name).toLowerCase());
+  const seen=new Set(readLocalList(SEEN_NOTIFICATION_KEYS));
+  cachedPosts.filter(post=>users.includes(String(post.username).toLowerCase())).forEach(post=>seen.add(postKey(post)));
+  localStorage.setItem(SEEN_NOTIFICATION_KEYS,JSON.stringify([...seen]));
+  renderNotifications();
+  $("notificationStatus").textContent="All currently loaded followed-user posts marked as seen.";
+}
 async function loadPosts() {
   const area = $("postFeed");
   area.replaceChildren(); const loading = document.createElement("div"); loading.className = "empty"; loading.textContent = "Fetching fresh posts…"; area.append(loading);
-  try { const data = await api("/api/posts"); cachedPosts = Array.isArray(data.posts) ? data.posts : []; renderPosts(); }
+  try { const data = await api("/api/posts"); cachedPosts = Array.isArray(data.posts) ? data.posts : []; renderPosts(); renderNotifications(); }
   catch(e) { cachedPosts = []; area.replaceChildren(); const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "Couldn't load posts: " + e.message; area.append(empty); $("postCount").textContent = "Feed unavailable"; }
 }
 async function publishPost() {
@@ -230,55 +295,13 @@ async function publishPost() {
   finally{$("publishPost").disabled=!signedInUser;}
 }
 
-const VIDEO_LIST_KEY = "jdogbrew-social-videos-v01";
-function youtubeId(value) {
-  try {
-    const url = new URL(value);
-    let id = "";
-    if (url.hostname === "youtu.be" || url.hostname.endsWith(".youtu.be")) id = url.pathname.split("/").filter(Boolean)[0] || "";
-    else if (url.hostname === "youtube.com" || url.hostname.endsWith(".youtube.com") || url.hostname === "www.youtube-nocookie.com") {
-      if (url.pathname === "/watch") id = url.searchParams.get("v") || "";
-      else if (/^\/(embed|shorts|live)\//.test(url.pathname)) id = url.pathname.split("/")[2] || "";
-    }
-    return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : "";
-  } catch (_) { return ""; }
-}
-function renderVideos() {
-  const area = $("videoFeed"); area.replaceChildren();
-  let videos = [];
-  try { videos = JSON.parse(localStorage.getItem(VIDEO_LIST_KEY) || "[]"); } catch (_) {}
-  if (!Array.isArray(videos)) videos = [];
-  if (!videos.length) { const empty=document.createElement("div"); empty.className="empty"; empty.textContent="No videos added yet."; area.append(empty); return; }
-  videos.forEach((video,index) => {
-    const card=document.createElement("article"); card.className="bubble";
-    const title=document.createElement("h2"); title.textContent=video.title || "YouTube video";
-    const frame=document.createElement("iframe"); frame.width="560"; frame.height="315"; frame.loading="lazy"; frame.title=video.title || "YouTube video player"; frame.src="https://www.youtube-nocookie.com/embed/"+video.id; frame.allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"; frame.referrerPolicy="strict-origin-when-cross-origin"; frame.allowFullscreen=true; frame.style.cssText="display:block;width:100%;aspect-ratio:16/9;height:auto;border:0;border-radius:12px;margin-top:10px";
-    const remove=document.createElement("button"); remove.type="button"; remove.textContent="Remove"; remove.style.marginTop="10px"; remove.addEventListener("click",()=>{videos.splice(index,1);localStorage.setItem(VIDEO_LIST_KEY,JSON.stringify(videos));renderVideos();$("videoStatus").textContent="Video removed from this device.";});
-    card.append(title,frame,remove); area.append(card);
-  });
-}
-function addVideo() {
-  const input=$("videoUrl"), id=youtubeId(input.value.trim());
-  if (!id) { $("videoStatus").textContent="That doesn't look like a valid YouTube video link. Try a regular video, Shorts, or youtu.be URL."; return; }
-  let videos=[];
-  try { videos=JSON.parse(localStorage.getItem(VIDEO_LIST_KEY)||"[]"); } catch (_) {}
-  if (!Array.isArray(videos)) videos=[];
-  if (videos.some(video=>video.id===id)) { $("videoStatus").textContent="That video is already in your list."; return; }
-  videos.unshift({id,title:"YouTube video",url:input.value.trim(),addedAt:new Date().toISOString()});
-  try { localStorage.setItem(VIDEO_LIST_KEY,JSON.stringify(videos)); }
-  catch (_) { $("videoStatus").textContent="Couldn't save videos in this browser."; return; }
-  input.value=""; $("videoStatus").textContent="Video added! This list is saved only on this device in version 0.1."; renderVideos();
-}
-
-$("addVideo").addEventListener("click",addVideo);
-$("videoUrl").addEventListener("keydown",e=>{if(e.key==="Enter")addVideo();});
-$("registerAccount").addEventListener("click",()=>accountAction("register"));
-$("loginAccount").addEventListener("click",()=>accountAction("login"));
 function logOut() { accountToken=""; localStorage.removeItem(ACCOUNT_TOKEN_KEY); setAccount(null); $("accountStatus").textContent="Signed out on this device."; $("profileStatus").textContent="Sign in to edit your profile."; if (window.jdbSelectSection) window.jdbSelectSection("account"); }
 $("logoutAccount").addEventListener("click",logOut);
 $("profileLogout").addEventListener("click",logOut);
 $("publishPost").addEventListener("click",publishPost);
 $("refreshPosts").addEventListener("click",loadPosts);
+$("refreshNotifications").addEventListener("click",loadPosts);
+$("clearNotifications").addEventListener("click",markNotificationsSeen);
 $("postComposer").value = localStorage.getItem(DRAFT_KEY) || "";
 updateComposerMeta();
 $("postComposer").addEventListener("input", () => {
@@ -303,5 +326,5 @@ $("profileAvatar").addEventListener("change",async e=>{
   catch(err){selectedAvatar=undefined;$("profileStatus").textContent=err.message;e.target.value="";}
 });
 $("clearAvatar").addEventListener("click",()=>{selectedAvatar=null;$("myAvatar").src=fallbackAvatar;$("profileAvatar").value="";$("profileStatus").textContent="Picture will be removed when you save.";});
-setAccount(null); renderVideos(); loadPosts(); restoreAccount();
+setAccount(null); renderNotifications(); loadPosts(); restoreAccount();
 })();
