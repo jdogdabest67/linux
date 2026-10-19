@@ -48,6 +48,13 @@ async function accountAction(mode) {
     await loadMyProfile(); await loadPosts();
   } catch (e) { $("accountStatus").textContent = e.message; }
 }
+function updateBannerPreview() {
+  const url = $("profileBannerUrl").value.trim(), preview = $("myBannerPreview");
+  let valid = false;
+  try { const parsed = new URL(url); valid = ["http:", "https:"].includes(parsed.protocol); } catch (_) {}
+  preview.hidden = !valid;
+  preview.style.backgroundImage = valid ? "url(" + JSON.stringify(url) + ")" : "";
+}
 function applyMyProfile(p) {
   $("myDisplayName").textContent = p.displayName || p.username;
   $("myUsername").textContent = "@" + p.username;
@@ -56,6 +63,14 @@ function applyMyProfile(p) {
   $("myFollowing").textContent = p.following;
   $("profileDisplayName").value = p.displayName || "";
   $("profileBio").value = p.bio || "";
+  $("profilePronouns").value = p.pronouns || "";
+  $("profileFavoriteGame").value = p.favoriteGame || "";
+  $("profileAccent").value = p.accent || "#a78bfa";
+  $("profileBannerUrl").value = p.bannerUrl || "";
+  const banner = $("myBanner"); banner.hidden = !p.bannerUrl; banner.style.backgroundImage = p.bannerUrl ? "url(" + JSON.stringify(p.bannerUrl) + ")" : "";
+  $("myProfilePanel").style.setProperty("--profile-accent", p.accent || "#a78bfa");
+  $("myAvatar").style.borderColor = p.accent || "#a78bfa";
+  updateBannerPreview();
 }
 async function loadMyProfile() {
   if (!signedInUser) return;
@@ -79,7 +94,7 @@ async function saveProfile() {
   if (!signedInUser) { $("profileStatus").textContent = "Sign in first."; return; }
   try {
     $("saveProfile").disabled = true; $("profileStatus").textContent = "Saving profile…";
-    const payload = {displayName:$("profileDisplayName").value, bio:$("profileBio").value};
+    const payload = {displayName:$("profileDisplayName").value, bio:$("profileBio").value, pronouns:$("profilePronouns").value, favoriteGame:$("profileFavoriteGame").value, accent:$("profileAccent").value, bannerUrl:$("profileBannerUrl").value.trim()};
     if (selectedAvatar !== undefined) payload.avatar = selectedAvatar;
     const d = await api("/api/profile", {method:"POST",body:JSON.stringify(payload)});
     applyMyProfile(d.profile); selectedAvatar = undefined; $("profileAvatar").value = "";
@@ -89,8 +104,9 @@ async function saveProfile() {
 }
 function renderProfile(p) {
   const root = $("profileResult"); root.replaceChildren();
+  const banner = document.createElement("div"); banner.className = "profile-public-banner"; banner.hidden = !p.bannerUrl; if (p.bannerUrl) banner.style.backgroundImage = "url(" + JSON.stringify(p.bannerUrl) + ")"; root.append(banner);
   const card = document.createElement("div"); card.className = "profile-top";
-  const img = document.createElement("img"); img.className = "avatar"; img.alt = "Profile picture"; img.src = p.avatar || fallbackAvatar;
+  const img = document.createElement("img"); img.className = "avatar"; img.alt = "Profile picture"; img.src = p.avatar || fallbackAvatar; img.style.borderColor = p.accent || "#a78bfa";
   const details = document.createElement("div");
   const name = document.createElement("h2"); name.textContent = p.displayName || p.username;
   const handle = document.createElement("p"); handle.className = "small"; handle.textContent = "@" + p.username;
@@ -98,7 +114,7 @@ function renderProfile(p) {
   const stats = document.createElement("div"); stats.className = "profile-stats";
   const followers = document.createElement("span"); followers.innerHTML = "<strong></strong> followers"; followers.querySelector("strong").textContent = p.followers;
   const following = document.createElement("span"); following.innerHTML = "<strong></strong> following"; following.querySelector("strong").textContent = p.following;
-  stats.append(followers, following); details.append(name,handle,bio,stats); card.append(img,details); root.append(card);
+  stats.append(followers, following); details.append(name,handle,bio); const extra = document.createElement("p"); extra.className = "small"; extra.textContent = [p.pronouns, p.favoriteGame ? "Favorite game: " + p.favoriteGame : ""].filter(Boolean).join(" · "); if (extra.textContent) details.append(extra); details.append(stats); card.append(img,details); root.append(card);
   if (signedInUser && !p.isSelf) {
     const actions = document.createElement("div"); actions.className = "profile-actions";
     const button = document.createElement("button"); button.className = "primary"; button.textContent = p.isFollowing ? "Unfollow" : "Follow";
@@ -336,6 +352,7 @@ $("clearDraft").addEventListener("click", () => {
 });
 $("postSearch").addEventListener("input", renderPosts);
 $("postImageUrl").addEventListener("input", updateImagePreview);
+$("profileBannerUrl").addEventListener("input", updateBannerPreview);
 $("imagePreviewImg").addEventListener("load", () => { $("imagePreviewStatus").textContent = "Preview ready. It will be attached when you publish."; });
 $("imagePreviewImg").addEventListener("error", () => { $("imagePreviewStatus").textContent = "Couldn’t load this preview. The URL may still work for other people."; });
 $("postSort").addEventListener("change", renderPosts);
