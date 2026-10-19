@@ -58,7 +58,7 @@ export default {
     }
 
     if (["/api/register", "/api/login", "/api/me", "/api/posts", "/api/profile", "/api/follow"].includes(url.pathname) ||
-        url.pathname.startsWith("/api/profile/") || url.pathname.startsWith("/api/posts/") || url.pathname.startsWith("/api/comments") || url.pathname.startsWith("/api/reactions") || url.pathname.startsWith("/api/reports") || url.pathname.startsWith("/api/blocks") || url.pathname.startsWith("/api/notifications")) {
+        url.pathname.startsWith("/api/profile/") || url.pathname.startsWith("/api/posts/") || url.pathname.startsWith("/api/comments") || url.pathname.startsWith("/api/reactions") || url.pathname.startsWith("/api/reports") || url.pathname.startsWith("/api/blocks") || url.pathname.startsWith("/api/notifications") || url.pathname.startsWith("/api/videos")) {
       const stub = env.SIGNAL_STORE.get(env.SIGNAL_STORE.idFromName("jdogbrew-social-data-v1"));
       return ensureCors(await stub.fetch(new Request("https://social-store.internal" + url.pathname + url.search, request)));
     }
@@ -147,6 +147,46 @@ export class SignalStore {
     if (url.pathname === "/api/blocks" && request.method === "POST") return this.toggleBlock(request);
     if (url.pathname === "/api/notifications" && request.method === "GET") return this.getNotifications(request);
     if (url.pathname === "/api/notifications/read" && request.method === "POST") return this.markNotificationsRead(request);
+    if (url.pathname === "/api/videos" && request.method === "GET") {
+      const videos = (await this.ctx.storage.get("social-videos")) || [];
+      const viewer = await this.authUser(request);
+      const blocks = (await this.ctx.storage.get("social-blocks")) || {};
+      const blocked = viewer ? new Set(blocks[viewer.username.toLowerCase()] || []) : new Set();
+      const blockedBy = viewer ? new Set(Object.keys(blocks).filter(key => (blocks[key] || []).includes(viewer.username.toLowerCase()))) : new Set();
+      return json({ ok: true, videos: videos.filter(v => !blocked.has(String(v.username).toLowerCase()) && !blockedBy.has(String(v.username).toLowerCase())).slice(-100).reverse() });
+    }
+    if (url.pathname.startsWith("/api/videos/") && request.method === "DELETE") {
+      const user = await this.authUser(request);
+      if (!user) return json({ ok: false, error: "Sign in required to delete a video." }, 401);
+      const videoId = decodeURIComponent(url.pathname.slice("/api/videos/".length));
+      const videos = (await this.ctx.storage.get("social-videos")) || [];
+      const video = videos.find(item => String(item.id) === videoId);
+      if (!video) return json({ ok: false, error: "Video not found." }, 404);
+      if (String(video.username).toLowerCase() !== user.username.toLowerCase()) return json({ ok: false, error: "You can only delete videos from your own channel." }, 403);
+      await this.ctx.storage.put("social-videos", videos.filter(item => String(item.id) !== videoId));
+      return json({ ok: true, deletedId: videoId });
+    }
+    if (url.pathname === "/api/videos" && request.method === "POST") {
+      const user = await this.authUser(request);
+      if (!user) return json({ ok: false, error: "Sign in required to share a video." }, 401);
+      let body;
+      try { body = await request.json(); } catch { return json({ ok: false, error: "Expected JSON." }, 400); }
+      const title = typeof body.title === "string" ? body.title.trim() : "";
+      const description = typeof body.description === "string" ? body.description.trim() : "";
+      const urlValue = typeof body.url === "string" ? body.url.trim() : "";
+      const type = body.type === "short" ? "short" : body.type === "video" ? "video" : "";
+      let parsed;
+      try { parsed = new URL(urlValue); } catch (_) { return json({ ok: false, error: "Enter a valid public video URL." }, 400); }
+      if (!title || title.length > 100 || description.length > 500 || !type || !["http:","https:"].includes(parsed.protocol) || urlValue.length > 700) {
+        return json({ ok: false, error: "Video title, description, format, or URL is invalid." }, 400);
+      }
+      const videos = (await this.ctx.storage.get("social-videos")) || [];
+      const video = { id: crypto.randomUUID(), username: user.username, title, description, url: parsed.href, type, createdAt: Date.now() };
+      videos.push(video);
+      await this.ctx.storage.put("social-videos", videos.slice(-1000));
+      return json({ ok: true, video }, 201);
+    }
+
     if (url.pathname === "/api/posts" && request.method === "GET") {
       const posts = (await this.ctx.storage.get("social-posts")) || [];
       const viewer = await this.authUser(request);
