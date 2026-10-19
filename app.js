@@ -416,18 +416,55 @@ async function publishPost() {
 
 
 const cachedGroups = [];
+let activeGroupId = "";
+let cachedGroupPosts = [];
+function currentGroup(){return cachedGroups.find(g=>String(g.id)===String(activeGroupId))||null;}
+function safeHttpUrl(raw){try{const u=new URL(raw);return ["http:","https:"].includes(u.protocol)?u.href:"";}catch(_){return "";}}
 function renderGroups(){
  const area=$("groupFeed");area.replaceChildren();const query=$("groupSearch").value.trim().toLowerCase(),filter=$("groupFilter").value,me=signedInUser?signedInUser.username.toLowerCase():"";
  const list=cachedGroups.filter(g=>{const owner=String(g.owner||"").toLowerCase()===me,joined=Array.isArray(g.members)&&g.members.some(n=>String(n).toLowerCase()===me);return(filter==="all"||(filter==="joined"&&me&&joined)||(filter==="created"&&me&&owner))&&(!query||[g.name,g.description,g.owner].some(v=>String(v||"").toLowerCase().includes(query)));});
  $("groupCount").textContent=list.length+" group"+(list.length===1?"":"s");
  if(!list.length){const e=document.createElement("div");e.className="empty";e.textContent=cachedGroups.length?"No groups match those filters yet.":"No groups yet. Create the first community! 👥";area.append(e);return;}
- for(const g of list){const card=document.createElement("article");card.className="bubble";const head=document.createElement("div");head.className="bubble-head";const owner=document.createElement("span");owner.textContent="Created by @"+g.owner;const time=document.createElement("time");time.textContent=new Date(g.createdAt).toLocaleDateString();head.append(owner,time);const title=document.createElement("h3");title.textContent=g.name;title.style.marginTop="0";const desc=document.createElement("p");desc.className="bubble-body";desc.textContent=g.description||"No description yet.";const n=Array.isArray(g.members)?g.members.length:0,meta=document.createElement("p");meta.className="small";meta.textContent=n+" member"+(n===1?"":"s");card.append(head,title,desc,meta);const actions=document.createElement("div");actions.className="actions";const isOwner=!!me&&String(g.owner).toLowerCase()===me,isMember=!!me&&Array.isArray(g.members)&&g.members.some(x=>String(x).toLowerCase()===me);
+ for(const g of list){const card=document.createElement("article");card.className="bubble";const head=document.createElement("div");head.className="bubble-head";const owner=document.createElement("span");owner.textContent="Created by @"+g.owner;const time=document.createElement("time");time.textContent=new Date(g.createdAt).toLocaleDateString();head.append(owner,time);const title=document.createElement("h3");title.textContent=g.name;title.style.marginTop="0";const desc=document.createElement("p");desc.className="bubble-body";desc.textContent=g.description||"No description yet.";const n=Array.isArray(g.members)?g.members.length:0,meta=document.createElement("p");meta.className="small";meta.textContent=n+" member"+(n===1?"":"s");card.append(head,title,desc,meta);const actions=document.createElement("div");actions.className="actions";const open=document.createElement("button");open.type="button";open.className="primary";open.textContent="Open group";open.addEventListener("click",()=>openGroup(g.id));actions.append(open);const isOwner=!!me&&String(g.owner).toLowerCase()===me,isMember=!!me&&Array.isArray(g.members)&&g.members.some(x=>String(x).toLowerCase()===me);
  if(!isOwner){const b=document.createElement("button");b.type="button";b.textContent=isMember?"Leave group":"Join group";b.disabled=!signedInUser;b.addEventListener("click",async()=>{b.disabled=true;try{const action=isMember?"leave":"join";await api("/api/groups/"+encodeURIComponent(g.id)+"/member",{method:"POST",body:JSON.stringify({action})});$("groupStatus").textContent=action==="join"?"You joined "+g.name+".":"You left "+g.name+".";await loadGroups();}catch(e){$("groupStatus").textContent=e.message;b.disabled=false;}});actions.append(b);}
- if(isOwner){const b=document.createElement("button");b.type="button";b.textContent="Delete group";b.addEventListener("click",async()=>{if(!confirm("Delete the group '"+g.name+"'? This cannot be undone."))return;b.disabled=true;try{await api("/api/groups/"+encodeURIComponent(g.id),{method:"DELETE"});$("groupStatus").textContent="Group deleted.";await loadGroups();}catch(e){$("groupStatus").textContent=e.message;b.disabled=false;}});actions.append(b);}card.append(actions);area.append(card);}
+ if(isOwner){const b=document.createElement("button");b.type="button";b.textContent="Delete group";b.addEventListener("click",async()=>{if(!confirm("Delete the group '"+g.name+"'? This cannot be undone."))return;b.disabled=true;try{await api("/api/groups/"+encodeURIComponent(g.id),{method:"DELETE"});if(String(activeGroupId)===String(g.id)){$("groupDetail").hidden=true;activeGroupId="";}$("groupStatus").textContent="Group deleted.";await loadGroups();}catch(e){$("groupStatus").textContent=e.message;b.disabled=false;}});actions.append(b);}card.append(actions);area.append(card);}
 }
-async function loadGroups(){const area=$("groupFeed");area.replaceChildren();const e=document.createElement("div");e.className="empty";e.textContent="Fetching communities…";area.append(e);try{const data=await api("/api/groups");cachedGroups.splice(0,cachedGroups.length,...(Array.isArray(data.groups)?data.groups:[]));renderGroups();}catch(err){cachedGroups.splice(0);area.replaceChildren();const e2=document.createElement("div");e2.className="empty";e2.textContent="Couldn't load groups: "+err.message;area.append(e2);$("groupCount").textContent="Groups unavailable";}}
-async function createGroup(){if(!signedInUser){$("groupStatus").textContent="Sign in first to create a group.";return;}const name=$("groupName").value.trim(),description=$("groupDescription").value.trim();if(name.length<2||name.length>40){$("groupStatus").textContent="Group names must be 2–40 characters.";return;}try{$("createGroup").disabled=true;$("groupStatus").textContent="Creating your group…";await api("/api/groups",{method:"POST",body:JSON.stringify({name,description})});$("groupName").value="";$("groupDescription").value="";$("groupStatus").textContent="Group created! Your community has officially spawned. 🎉";await loadGroups();}catch(e){$("groupStatus").textContent=e.message;}finally{$("createGroup").disabled=!signedInUser;}}
-
+function renderGroupDetail(){
+ const group=currentGroup(),panel=$("groupDetail");if(!group){panel.hidden=true;return;}panel.hidden=false;
+ $("groupDetailTitle").textContent=group.name;$("groupDetailDescription").textContent=group.description||"No description yet.";
+ const members=Array.isArray(group.members)?group.members:[],isMember=!!signedInUser&&members.some(n=>String(n).toLowerCase()===signedInUser.username.toLowerCase());
+ $("groupDetailMeta").textContent="Created by @"+group.owner+" · "+members.length+" member"+(members.length===1?"":"")+(isMember?" · You're a member":"");
+ $("groupPostComposer").disabled=!isMember;$("groupPostImageUrl").disabled=!isMember;$("publishGroupPost").disabled=!isMember;
+ if(!signedInUser)$("groupPostStatus").textContent="Sign in and join this group to post.";else if(!isMember)$("groupPostStatus").textContent="Join this group to publish posts.";
+}
+async function openGroup(id){
+ activeGroupId=String(id);cachedGroupPosts=[];renderGroupDetail();$("groupPostFeed").replaceChildren();
+ const loading=document.createElement("div");loading.className="empty";loading.textContent="Loading the group feed…";$("groupPostFeed").append(loading);
+ $("groupDetail").hidden=false;$("groupDetail").scrollIntoView({behavior:"smooth",block:"start"});
+ await loadGroupPosts();
+}
+async function loadGroupPosts(){
+ const group=currentGroup();if(!group)return;renderGroupDetail();const area=$("groupPostFeed");area.replaceChildren();
+ try{const data=await api("/api/groups/"+encodeURIComponent(group.id)+"/posts");cachedGroupPosts=Array.isArray(data.posts)?data.posts:[];renderGroupPosts();}
+ catch(e){const empty=document.createElement("div");empty.className="empty";empty.textContent="Couldn't load group posts: "+e.message;area.append(empty);}
+}
+function renderGroupPosts(){
+ const area=$("groupPostFeed");area.replaceChildren();
+ if(!cachedGroupPosts.length){const e=document.createElement("div");e.className="empty";e.textContent="No posts in this group yet. Start the conversation! ✨";area.append(e);return;}
+ for(const post of cachedGroupPosts){const card=document.createElement("article");card.className="bubble";const head=document.createElement("div");head.className="bubble-head";const author=document.createElement("strong");author.textContent="@"+post.username;const time=document.createElement("time");const date=new Date(post.createdAt);time.textContent=relativeTime(date);time.title=date.toLocaleString();head.append(author,time);
+ if(signedInUser&&(String(post.username).toLowerCase()===signedInUser.username.toLowerCase()||String(currentGroup()?.owner||"").toLowerCase()===signedInUser.username.toLowerCase())){const del=document.createElement("button");del.type="button";del.textContent="Delete";del.addEventListener("click",async()=>{if(!confirm("Delete this group post?"))return;del.disabled=true;try{await api("/api/groups/"+encodeURIComponent(activeGroupId)+"/posts/"+encodeURIComponent(post.id),{method:"DELETE"});$("groupPostStatus").textContent="Group post deleted.";await loadGroupPosts();}catch(e){$("groupPostStatus").textContent=e.message;del.disabled=false;}});head.append(del);}
+ card.append(head);if(post.content){const body=document.createElement("div");body.className="bubble-body";body.textContent=post.content;card.append(body);}if(post.imageUrl){const url=safeHttpUrl(post.imageUrl);if(url){const image=document.createElement("img");image.className="post-media";image.loading="lazy";image.alt="Image attached to group post";image.src=url;image.addEventListener("error",()=>{image.alt="Image could not be loaded";});card.append(image);}}area.append(card);}
+}
+async function publishGroupPost(){
+ const group=currentGroup();if(!group){$("groupPostStatus").textContent="Open a group first.";return;}if(!signedInUser){$("groupPostStatus").textContent="Sign in first.";return;}
+ const content=$("groupPostComposer").value.trim(),imageUrlRaw=$("groupPostImageUrl").value.trim(),imageUrl=imageUrlRaw?safeHttpUrl(imageUrlRaw):"";
+ if(imageUrlRaw&&!imageUrl){$("groupPostStatus").textContent="Enter a valid public image URL beginning with http:// or https://.";return;}
+ if(!content&&!imageUrl){$("groupPostStatus").textContent="Write something or attach an image first.";return;}if(content.length>1000){$("groupPostStatus").textContent="Group posts are limited to 1000 text characters.";return;}
+ try{$("publishGroupPost").disabled=true;$("groupPostStatus").textContent="Publishing to the group…";await api("/api/groups/"+encodeURIComponent(group.id)+"/posts",{method:"POST",body:JSON.stringify({content,imageUrl})});$("groupPostComposer").value="";$("groupPostImageUrl").value="";$("groupPostStatus").textContent="Posted to "+group.name+"! 🎉";await loadGroupPosts();}
+ catch(e){$("groupPostStatus").textContent=e.message;}finally{renderGroupDetail();}
+}
+async function loadGroups(){const area=$("groupFeed");area.replaceChildren();const e=document.createElement("div");e.className="empty";e.textContent="Fetching communities…";area.append(e);try{const data=await api("/api/groups");cachedGroups.splice(0,cachedGroups.length,...(Array.isArray(data.groups)?data.groups:[]));renderGroups();if(activeGroupId){if(currentGroup())renderGroupDetail();else{$("groupDetail").hidden=true;activeGroupId="";}}}catch(err){cachedGroups.splice(0);area.replaceChildren();const e2=document.createElement("div");e2.className="empty";e2.textContent="Couldn't load groups: "+err.message;area.append(e2);$("groupCount").textContent="Groups unavailable";}}
+async function createGroup(){if(!signedInUser){$("groupStatus").textContent="Sign in first to create a group.";return;}const name=$("groupName").value.trim(),description=$("groupDescription").value.trim();if(name.length<2||name.length>40){$("groupStatus").textContent="Group names must be 2–40 characters.";return;}try{$("createGroup").disabled=true;$("groupStatus").textContent="Creating your group…";const data=await api("/api/groups",{method:"POST",body:JSON.stringify({name,description})});$("groupName").value="";$("groupDescription").value="";$("groupStatus").textContent="Group created! Your community has officially spawned. 🎉";await loadGroups();if(data.group)await openGroup(data.group.id);}catch(e){$("groupStatus").textContent=e.message;}finally{$("createGroup").disabled=!signedInUser;}}
 function logOut() { accountToken=""; localStorage.removeItem(ACCOUNT_TOKEN_KEY); setAccount(null); $("accountStatus").textContent="Signed out on this device."; $("profileStatus").textContent="Sign in to edit your profile."; if (window.jdbSelectSection) window.jdbSelectSection("account"); }
 $("registerAccount").addEventListener("click", () => accountAction("register"));
 $("loginAccount").addEventListener("click", () => accountAction("login"));
@@ -435,6 +472,9 @@ $("logoutAccount").addEventListener("click",logOut);
 $("profileLogout").addEventListener("click",logOut);
 $("publishPost").addEventListener("click",publishPost);
 $("createGroup").addEventListener("click",createGroup);
+$("publishGroupPost").addEventListener("click",publishGroupPost);
+$("refreshGroupPosts").addEventListener("click",loadGroupPosts);
+$("backToGroups").addEventListener("click",()=>{$("groupDetail").hidden=true;activeGroupId="";});
 $("refreshGroups").addEventListener("click",loadGroups);
 $("groupSearch").addEventListener("input",renderGroups);
 $("groupFilter").addEventListener("change",renderGroups);
