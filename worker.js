@@ -57,7 +57,8 @@ export default {
       return stub.fetch(request);
     }
 
-    if (["/api/register", "/api/login", "/api/me", "/api/posts"].includes(url.pathname)) {
+    if (["/api/register", "/api/login", "/api/me", "/api/posts", "/api/profile", "/api/follow"].includes(url.pathname) ||
+        url.pathname.startsWith("/api/profile/")) {
       const stub = env.SIGNAL_STORE.get(env.SIGNAL_STORE.idFromName("jdogbrew-social-data-v1"));
       return ensureCors(await stub.fetch(new Request("https://social-store.internal" + url.pathname + url.search, request)));
     }
