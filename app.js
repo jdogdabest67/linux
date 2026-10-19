@@ -408,6 +408,8 @@ async function publishPost() {
 }
 
 function logOut() { accountToken=""; localStorage.removeItem(ACCOUNT_TOKEN_KEY); setAccount(null); $("accountStatus").textContent="Signed out on this device."; $("profileStatus").textContent="Sign in to edit your profile."; if (window.jdbSelectSection) window.jdbSelectSection("account"); }
+$("registerAccount").addEventListener("click", () => accountAction("register"));
+$("loginAccount").addEventListener("click", () => accountAction("login"));
 $("logoutAccount").addEventListener("click",logOut);
 $("profileLogout").addEventListener("click",logOut);
 $("publishPost").addEventListener("click",publishPost);
