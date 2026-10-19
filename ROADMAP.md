@@ -6,7 +6,8 @@ This roadmap gathers the JDog Social ideas recoverable from the project discussi
 
 - **Profiles:** usernames, display names, bios, pronouns, favorite game, accent color, avatar, and banner URL.
 - **Social graph:** follow/unfollow and follower/following counts.
-- **Posts:** text posts and optional image URLs, search/sort, local drafts, and author deletion.
+- **Posts:** text posts and optional image URLs, topic categories (General, Games, Memes, Art, Projects, Tutorials), Explore and Following feeds, search/sort, local drafts, and author deletion.
+- **Creator badges:** server-calculated Dog Bone milestone tiers at 10K, 100K, 1M, and 10M real followers; creators can choose an earned badge to display.
 - **Interactions:** likes/reactions, replies/comments, interaction notifications, post reports, and account blocking.
 - **Groups:** create, browse/search, join/leave, group owners, separate group pages, and group posts.
 - **Responsive organization:** separate pages and grouped site navigation.
@@ -22,11 +23,10 @@ The group feature and any backend changes still need a successful Cloudflare Wor
    - Add a visible backend health/version check so an old Worker produces a clear warning.
    - Use a preview deployment or test branch before changing the main site.
 
-2. **Improve the feed**
-   - Add a real **Following** feed, separate from an **Explore / Recent** feed.
-   - Move followed-account post tracking from browser storage to the backend, so it follows the account between devices.
-   - Add topic tags such as games, memes, art, projects, and tutorials; let people click a tag to browse related posts. Keep general tags instead of forcing posts into a narrow fan-art category.
-   - Keep search and newest-first sorting; add a simple tag filter before attempting complicated ranking.
+2. **Next feed improvements**
+   - **Implemented in source:** separate Explore and server-filtered Following feeds.
+   - **Implemented in source:** post topic categories for General, Games, Memes, Art, Projects, and Tutorials, with a clickable topic control on each post.
+   - Next: add optional free-form hashtags after topic categories are tested, and move followed-account notification tracking from browser storage to the backend so it follows the account between devices.
 
 3. **Shareable creator profiles**
    - Add a public route such as profile.html?user=username so a profile can be linked directly from posts or elsewhere.
@@ -36,10 +36,10 @@ The group feature and any backend changes still need a successful Cloudflare Wor
 ### Phase B: Add the brainstormed creator features
 
 4. **Dog Bone creator awards**
-   - Implement the discussed milestone tiers: **Normal at 10K followers, Metallic at 100K, Golden at 1M, and Amethyst at 10M**.
-   - Compute eligibility on the server from unique follower relationships, not a number a user can edit.
-   - Let eligible creators choose which earned badge to display. Never sell the badge or let a user award one to themselves.
-   - Add basic anti-abuse rules first: rate limits on account creation/following, one follow per account pair, and a way to remove spam/fake accounts. Treat milestones as a fun prototype feature, not a verified real-world award.
+   - **Implemented in source:** server-calculated tiers: Normal at 10K, Metallic at 100K, Golden at 1M, and Amethyst at 10M followers.
+   - **Implemented in source:** eligible creators can choose which earned badge to display; the Worker rejects selecting a badge whose follower threshold has not been reached.
+   - Next: add tests and rate limits to reduce fake-follow manipulation, plus a way for moderators to remove abusive accounts. Treat milestones as a fun prototype feature, not a verified real-world award.
+   - The new badge fields require the updated Cloudflare Worker deployment before the public site can save or display these badges.
 
 5. **Video sharing without becoming a video-hosting service**
    - Reintroduce a video-post type that accepts a **YouTube URL**, creates a clean preview card, and links back to the original video.
