@@ -187,7 +187,9 @@ export class SignalStore {
       bio: profile.bio || "",
       avatar: profile.avatar || "",
       followers,
-      following
+      following,
+      isFollowing,
+      isSelf: !!viewerUsername && viewerUsername.toLowerCase() === key
     }});
   }
 
