@@ -134,7 +134,8 @@ export class SignalStore {
     if (url.pathname.startsWith("/api/profile/") && request.method === "GET") {
       const username = decodeURIComponent(url.pathname.slice("/api/profile/".length));
       if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return json({ ok: false, error: "Invalid username." }, 400);
-      const viewer = await this.authUser(request);\n      return this.profileResponse(username, viewer ? viewer.username : "");
+      const viewer = await this.authUser(request);
+      return this.profileResponse(username, viewer ? viewer.username : "");
     }
     if (url.pathname === "/api/follow" && request.method === "POST") return this.followUser(request);
     if (url.pathname === "/api/posts" && request.method === "GET") {
