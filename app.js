@@ -30,6 +30,7 @@ function setAccount(user) {
   $("clearAvatar").disabled = !user;
   updateNotificationStatus();
   if (typeof renderGroups === "function") renderGroups();
+  if (typeof renderGroupDetail === "function" && activeGroupId) renderGroupDetail();
   if (user) { loadNotifications(); loadBlockedUsers(); } else { loadBlockedUsers(); }
 }
 async function restoreAccount() {
@@ -438,6 +439,7 @@ function renderGroupDetail(){
  if(!signedInUser)$("groupPostStatus").textContent="Sign in and join this group to post.";else if(!isMember)$("groupPostStatus").textContent="Join this group to publish posts.";
 }
 async function openGroup(id){
+ if(document.body.dataset.groupDetailPage!=="true"){window.location.href="./group.html?id="+encodeURIComponent(id);return;}
  activeGroupId=String(id);cachedGroupPosts=[];renderGroupDetail();$("groupPostFeed").replaceChildren();
  const loading=document.createElement("div");loading.className="empty";loading.textContent="Loading the group feed…";$("groupPostFeed").append(loading);
  $("groupDetail").hidden=false;$("groupDetail").scrollIntoView({behavior:"smooth",block:"start"});
@@ -474,7 +476,7 @@ $("publishPost").addEventListener("click",publishPost);
 $("createGroup").addEventListener("click",createGroup);
 $("publishGroupPost").addEventListener("click",publishGroupPost);
 $("refreshGroupPosts").addEventListener("click",loadGroupPosts);
-$("backToGroups").addEventListener("click",()=>{$("groupDetail").hidden=true;activeGroupId="";});
+$("backToGroups").addEventListener("click",()=>{if(document.body.dataset.groupDetailPage==="true"){window.location.href="./groups.html";return;}$("groupDetail").hidden=true;activeGroupId="";});
 $("refreshGroups").addEventListener("click",loadGroups);
 $("groupSearch").addEventListener("input",renderGroups);
 $("groupFilter").addEventListener("change",renderGroups);
