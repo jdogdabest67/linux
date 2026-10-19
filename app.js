@@ -29,6 +29,7 @@ function setAccount(user) {
   $("saveProfile").disabled = !user;
   $("clearAvatar").disabled = !user;
   updateNotificationStatus();
+  if (typeof renderGroups === "function") renderGroups();
   if (user) { loadNotifications(); loadBlockedUsers(); } else { loadBlockedUsers(); }
 }
 async function restoreAccount() {
