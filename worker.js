@@ -187,6 +187,10 @@ export class SignalStore {
       displayName: profile.displayName || user.username,
       bio: profile.bio || "",
       avatar: profile.avatar || "",
+      pronouns: profile.pronouns || "",
+      favoriteGame: profile.favoriteGame || "",
+      accent: profile.accent || "#a78bfa",
+      bannerUrl: profile.bannerUrl || "",
       followers,
       following,
       isFollowing,
@@ -202,8 +206,16 @@ export class SignalStore {
     const displayName = typeof body.displayName === "string" ? body.displayName.trim() : "";
     const bio = typeof body.bio === "string" ? body.bio.trim() : "";
     const avatar = typeof body.avatar === "string" ? body.avatar : "";
+    const pronouns = typeof body.pronouns === "string" ? body.pronouns.trim() : "";
+    const favoriteGame = typeof body.favoriteGame === "string" ? body.favoriteGame.trim() : "";
+    const accent = typeof body.accent === "string" ? body.accent : "#a78bfa";
+    const bannerUrl = typeof body.bannerUrl === "string" ? body.bannerUrl.trim() : "";
     if (displayName.length > 40) return json({ ok: false, error: "Display name must be 40 characters or fewer." }, 400);
     if (bio.length > 160) return json({ ok: false, error: "Bio must be 160 characters or fewer." }, 400);
+    if (pronouns.length > 30) return json({ ok: false, error: "Pronouns must be 30 characters or fewer." }, 400);
+    if (favoriteGame.length > 40) return json({ ok: false, error: "Favorite game must be 40 characters or fewer." }, 400);
+    if (!["#a78bfa", "#67e8c0", "#8cc8ff", "#ff8fcf", "#ffc078"].includes(accent)) return json({ ok: false, error: "Choose one of the available profile accents." }, 400);
+    if (bannerUrl && (bannerUrl.length > 450 || !(bannerUrl.startsWith("http://") || bannerUrl.startsWith("https://")))) return json({ ok: false, error: "Banner URL must start with http:// or https:// and be 450 characters or fewer." }, 400);
     if (avatar && (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(avatar) || avatar.length > 220000)) {
       return json({ ok: false, error: "Choose a PNG, JPEG, or WebP image under the profile-picture size limit." }, 400);
     }
@@ -213,7 +225,11 @@ export class SignalStore {
     profiles[key] = {
       displayName: displayName || user.username,
       bio,
-      avatar: body.avatar === null ? "" : (avatar || prior.avatar || "")
+      avatar: body.avatar === null ? "" : (avatar || prior.avatar || ""),
+      pronouns: body.pronouns === undefined ? (prior.pronouns || "") : pronouns,
+      favoriteGame: body.favoriteGame === undefined ? (prior.favoriteGame || "") : favoriteGame,
+      accent: body.accent === undefined ? (prior.accent || "#a78bfa") : accent,
+      bannerUrl: body.bannerUrl === undefined ? (prior.bannerUrl || "") : bannerUrl
     };
     await this.ctx.storage.put("social-profiles", profiles);
     return this.profileResponse(user.username, user.username);
