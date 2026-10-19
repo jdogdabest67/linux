@@ -162,6 +162,24 @@ function updateComposerMeta() {
   $("postCharCount").textContent = count + " / 1000";
   $("postCharCount").className = count > 900 ? "count-near-limit" : "";
 }
+function updateImagePreview() {
+  const input = $("postImageUrl"), box = $("imagePreview"), image = $("imagePreviewImg"), status = $("imagePreviewStatus");
+  const raw = input.value.trim();
+  if (!raw) { box.hidden = true; image.removeAttribute("src"); status.textContent = "Image preview"; return; }
+  let url;
+  try { url = new URL(raw); } catch (_) { box.hidden = true; image.removeAttribute("src"); return; }
+  if (!["http:", "https:"].includes(url.protocol)) { box.hidden = true; image.removeAttribute("src"); return; }
+  box.hidden = false; status.textContent = "Loading image preview…"; image.src = url.href;
+}
+function relativeTime(date) {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (!Number.isFinite(seconds)) return date.toLocaleString();
+  if (seconds < 45) return "just now";
+  if (seconds < 3600) return Math.floor(seconds / 60) + "m ago";
+  if (seconds < 86400) return Math.floor(seconds / 3600) + "h ago";
+  if (seconds < 604800) return Math.floor(seconds / 86400) + "d ago";
+  return date.toLocaleDateString();
+}
 function renderPosts() {
   const area = $("postFeed");
   const query = $("postSearch").value.trim().toLowerCase();
@@ -192,7 +210,7 @@ function renderPosts() {
     authorName.append(who);
     author.append(avatar,authorName);
     const time = document.createElement("time"); const date = new Date(post.createdAt);
-    time.textContent = date.toLocaleString(); time.title = date.toLocaleString();
+    time.textContent = relativeTime(date); time.className = "timestamp-relative"; time.title = date.toLocaleString(); time.dateTime = date.toISOString();
     const copy = document.createElement("button"); copy.type = "button"; copy.textContent = "Copy text";
     copy.addEventListener("click", async () => {
       try {
@@ -304,6 +322,7 @@ $("refreshNotifications").addEventListener("click",loadPosts);
 $("clearNotifications").addEventListener("click",markNotificationsSeen);
 $("postComposer").value = localStorage.getItem(DRAFT_KEY) || "";
 updateComposerMeta();
+updateImagePreview();
 $("postComposer").addEventListener("input", () => {
   updateComposerMeta();
   try { localStorage.setItem(DRAFT_KEY, $("postComposer").value); $("draftStatus").textContent = $("postComposer").value ? "Draft saved on this device." : "Drafts save on this device."; }
@@ -316,6 +335,9 @@ $("clearDraft").addEventListener("click", () => {
   $("postComposer").focus();
 });
 $("postSearch").addEventListener("input", renderPosts);
+$("postImageUrl").addEventListener("input", updateImagePreview);
+$("imagePreviewImg").addEventListener("load", () => { $("imagePreviewStatus").textContent = "Preview ready. It will be attached when you publish."; });
+$("imagePreviewImg").addEventListener("error", () => { $("imagePreviewStatus").textContent = "Couldn’t load this preview. The URL may still work for other people."; });
 $("postSort").addEventListener("change", renderPosts);
 $("saveProfile").addEventListener("click",saveProfile);
 $("lookupProfile").addEventListener("click",lookupProfile);
