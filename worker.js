@@ -163,8 +163,49 @@ if(url.pathname==="/api/groups"&&request.method==="POST"){
 }
 if(url.pathname.startsWith("/api/groups/")){
  const rest=url.pathname.slice("/api/groups/".length).split("/"),groupId=decodeURIComponent(rest[0]||""),user=await this.authUser(request);
- if(request.method==="DELETE"&&rest.length===1){if(!user)return json({ok:false,error:"Sign in required to delete a group."},401);const groups=(await this.ctx.storage.get("social-groups"))||[],group=groups.find(g=>String(g.id)===groupId);if(!group)return json({ok:false,error:"Group not found."},404);if(String(group.owner).toLowerCase()!==user.username.toLowerCase())return json({ok:false,error:"Only the group creator can delete it."},403);await this.ctx.storage.put("social-groups",groups.filter(g=>String(g.id)!==groupId));return json({ok:true,deletedId:groupId});}
- if(request.method==="POST"&&rest.length===2&&rest[1]==="member"){if(!user)return json({ok:false,error:"Sign in required to join or leave groups."},401);let body;try{body=await request.json();}catch{return json({ok:false,error:"Expected JSON."},400);}if(!["join","leave"].includes(body.action))return json({ok:false,error:"Choose join or leave."},400);const groups=(await this.ctx.storage.get("social-groups"))||[],group=groups.find(g=>String(g.id)===groupId);if(!group)return json({ok:false,error:"Group not found."},404);const members=new Set(Array.isArray(group.members)?group.members:[group.owner]),key=user.username.toLowerCase();for(const member of members)if(String(member).toLowerCase()===key)members.delete(member);if(body.action==="join")members.add(user.username);if(String(group.owner).toLowerCase()===key)members.add(group.owner);group.members=Array.from(members);await this.ctx.storage.put("social-groups",groups);return json({ok:true,group});}
+ const groups=(await this.ctx.storage.get("social-groups"))||[],group=groups.find(g=>String(g.id)===groupId);
+ if(!group)return json({ok:false,error:"Group not found."},404);
+ if(rest.length===2&&rest[1]==="posts"&&request.method==="GET"){
+  const all=(await this.ctx.storage.get("social-group-posts"))||{},posts=Array.isArray(all[groupId])?all[groupId]:[];
+  const viewer=user?user.username.toLowerCase():"",blocks=(await this.ctx.storage.get("social-blocks"))||{};
+  const blocked=new Set(viewer?(blocks[viewer]||[]):[]),blockedBy=new Set(viewer?Object.keys(blocks).filter(key=>(blocks[key]||[]).includes(viewer)):[]);
+  return json({ok:true,posts:posts.filter(p=>!blocked.has(String(p.username).toLowerCase())&&!blockedBy.has(String(p.username).toLowerCase())).slice(-100).reverse()});
+ }
+ if(rest.length===2&&rest[1]==="posts"&&request.method==="POST"){
+  if(!user)return json({ok:false,error:"Sign in and join this group to post."},401);
+  const isMember=Array.isArray(group.members)&&group.members.some(name=>String(name).toLowerCase()===user.username.toLowerCase());
+  if(!isMember)return json({ok:false,error:"Join this group before publishing."},403);
+  let body;try{body=await request.json();}catch{return json({ok:false,error:"Expected JSON."},400);}
+  const content=typeof body.content==="string"?body.content.trim():"",imageUrl=typeof body.imageUrl==="string"?body.imageUrl.trim():"";
+  if(content.length>1000)return json({ok:false,error:"Group post text must be at most 1000 characters."},400);
+  if(!content&&!imageUrl)return json({ok:false,error:"Write something or attach an image."},400);
+  if(imageUrl){let parsed;try{parsed=new URL(imageUrl);}catch{return json({ok:false,error:"Enter a valid image URL."},400);}if(!["http:","https:"].includes(parsed.protocol)||imageUrl.length>450)return json({ok:false,error:"Image URLs must be HTTP or HTTPS and at most 450 characters."},400);}
+  const all=(await this.ctx.storage.get("social-group-posts"))||{},posts=Array.isArray(all[groupId])?all[groupId]:[];
+  const post={id:crypto.randomUUID(),groupId,username:user.username,content,imageUrl,createdAt:Date.now()};
+  posts.push(post);all[groupId]=posts.slice(-300);await this.ctx.storage.put("social-group-posts",all);return json({ok:true,post},201);
+ }
+ if(rest.length===3&&rest[1]==="posts"&&request.method==="DELETE"){
+  if(!user)return json({ok:false,error:"Sign in to delete a group post."},401);
+  const postId=decodeURIComponent(rest[2]||""),all=(await this.ctx.storage.get("social-group-posts"))||{},posts=Array.isArray(all[groupId])?all[groupId]:[],post=posts.find(p=>String(p.id)===postId);
+  if(!post)return json({ok:false,error:"Group post not found."},404);
+  if(String(post.username).toLowerCase()!==user.username.toLowerCase()&&String(group.owner).toLowerCase()!==user.username.toLowerCase())return json({ok:false,error:"You can only delete your own posts unless you own the group."},403);
+  all[groupId]=posts.filter(p=>String(p.id)!==postId);await this.ctx.storage.put("social-group-posts",all);return json({ok:true,deletedId:postId});
+ }
+ if(request.method==="DELETE"&&rest.length===1){
+  if(!user)return json({ok:false,error:"Sign in to delete a group."},401);
+  if(String(group.owner).toLowerCase()!==user.username.toLowerCase())return json({ok:false,error:"Only the group creator can delete it."},403);
+  await this.ctx.storage.put("social-groups",groups.filter(g=>String(g.id)!==groupId));
+  const all=(await this.ctx.storage.get("social-group-posts"))||{};delete all[groupId];await this.ctx.storage.put("social-group-posts",all);return json({ok:true,deletedId:groupId});
+ }
+ if(request.method==="POST"&&rest.length===2&&rest[1]==="member"){
+  if(!user)return json({ok:false,error:"Sign in required to join or leave groups."},401);
+  let body;try{body=await request.json();}catch{return json({ok:false,error:"Expected JSON."},400);}
+  if(!["join","leave"].includes(body.action))return json({ok:false,error:"Choose join or leave."},400);
+  const members=new Set(Array.isArray(group.members)?group.members:[group.owner]),key=user.username.toLowerCase();
+  for(const member of members)if(String(member).toLowerCase()===key)members.delete(member);
+  if(body.action==="join")members.add(user.username);if(String(group.owner).toLowerCase()===key)members.add(group.owner);
+  group.members=Array.from(members);await this.ctx.storage.put("social-groups",groups);return json({ok:true,group});
+ }
  return json({ok:false,error:"Unknown group action."},404);
 }
 
