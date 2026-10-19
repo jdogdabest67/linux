@@ -235,6 +235,25 @@ function renderPosts() {
       } catch (_) { $("postStatus").textContent = "Copy wasn't available. You can select the post text manually."; }
     });
     head.append(author,time,copy);
+    if (signedInUser && String(signedInUser.username).toLowerCase() === String(post.username).toLowerCase() && post.id) {
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "Delete";
+      remove.setAttribute("aria-label", "Delete your post");
+      remove.addEventListener("click", async () => {
+        if (!window.confirm("Delete this post permanently?")) return;
+        remove.disabled = true;
+        try {
+          await api("/api/posts/" + encodeURIComponent(post.id), {method:"DELETE"});
+          $("postStatus").textContent = "Post deleted.";
+          await loadPosts();
+        } catch (error) {
+          $("postStatus").textContent = error.message;
+          remove.disabled = false;
+        }
+      });
+      head.append(remove);
+    }
     const body = document.createElement("div"); body.className = "bubble-body"; body.textContent = parsed.text;
     card.append(head,body);
     getProfileCached(post.username).then(profile => { if (profile && profile.avatar && avatar.isConnected) avatar.src = profile.avatar; });
