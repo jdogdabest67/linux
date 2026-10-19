@@ -332,7 +332,7 @@ if (url.pathname === "/api/posts" && request.method === "GET") {
     if (pronouns.length > 30) return json({ ok: false, error: "Pronouns must be 30 characters or fewer." }, 400);
     if (favoriteGame.length > 40) return json({ ok: false, error: "Favorite game must be 40 characters or fewer." }, 400);
     if (!["#a78bfa", "#67e8c0", "#8cc8ff", "#ff8fcf", "#ffc078"].includes(accent)) return json({ ok: false, error: "Choose one of the available profile accents." }, 400);
-    if (bannerUrl && !((bannerUrl.length <= 450 && (bannerUrl.startsWith("http://") || bannerUrl.startsWith("https://"))) || (bannerUrl.length <= 180000 && /^data:image\\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(bannerUrl)))) return json({ ok: false, error: "Use an HTTP(S) banner URL or a custom JPEG banner under the size limit." }, 400);
+    if (bannerUrl && !((bannerUrl.length <= 450 && (bannerUrl.startsWith("http://") || bannerUrl.startsWith("https://"))) || (bannerUrl.length <= 180000 && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(bannerUrl)))) return json({ ok: false, error: "Use an HTTP(S) banner URL or a custom JPEG banner under the size limit." }, 400);
     if (avatar && (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(avatar) || avatar.length > 220000)) {
       return json({ ok: false, error: "Choose a PNG, JPEG, or WebP image under the profile-picture size limit." }, 400);
     }
