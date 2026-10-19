@@ -7,6 +7,18 @@ let accountToken = localStorage.getItem(ACCOUNT_TOKEN_KEY) || "";
 let signedInUser = null;
 let selectedAvatar = undefined;
 const fallbackAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='50' fill='%23263848'/%3E%3Ctext x='50' y='62' font-size='44' text-anchor='middle' fill='%23e8f0f7'%3E%3F%3C/text%3E%3C/svg%3E";
+const POST_CATEGORIES = ["general", "games", "memes", "art", "projects", "tutorials"];
+const POST_CATEGORY_LABELS = { general: "General", games: "Games", memes: "Memes", art: "Art", projects: "Projects", tutorials: "Tutorials" };
+function makeCreatorBadge(badge) {
+  const pill = document.createElement("span");
+  pill.className = "creator-badge-pill creator-badge-" + String(badge.id || "normal");
+  pill.textContent = "🦴 " + String(badge.tier || "Normal") + " Dog Bone";
+  pill.title = String(badge.threshold || 0).toLocaleString() + " followers milestone";
+  return pill;
+}
+function postCategory(post) {
+  return POST_CATEGORIES.includes(post && post.category) ? post.category : "general";
+}
 
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -26,6 +38,8 @@ function setAccount(user) {
   $("signedInProfile").hidden = !user;
   document.querySelectorAll("[data-account-nav]").forEach(button => { button.textContent = user ? "🪪 Profile" : "👤 Account"; });
   $("publishPost").disabled = !user;
+  $("postFeedMode").disabled = !user;
+  if (!user) $("postFeedMode").value = "explore";
   $("saveProfile").disabled = !user;
   $("clearAvatar").disabled = !user;
   updateNotificationStatus();
@@ -70,6 +84,18 @@ function applyMyProfile(p) {
   $("myAvatar").src = p.avatar || fallbackAvatar;
   $("myFollowers").textContent = p.followers;
   $("myFollowing").textContent = p.following;
+  const badgeBox = $("myBadgeDisplay");
+  badgeBox.replaceChildren();
+  badgeBox.hidden = !p.displayBadge;
+  if (p.displayBadge) badgeBox.append(makeCreatorBadge(p.displayBadge));
+  const badgeSelect = $("profileBadge");
+  const earnedBadgeIds = new Set((p.earnedBadges || []).map(badge => badge.id));
+  for (const option of badgeSelect.options) if (option.value) option.disabled = !earnedBadgeIds.has(option.value);
+  badgeSelect.value = p.displayBadgeId || "";
+  const nextBadge = p.nextBadge;
+  $("profileBadgeHelp").textContent = earnedBadgeIds.size
+    ? "You've earned " + earnedBadgeIds.size + " Dog Bone badge" + (earnedBadgeIds.size === 1 ? "" : "s") + ". Choose one to display."
+    : "Your first Dog Bone unlocks at 10,000 followers. " + (nextBadge ? "Next milestone: " + nextBadge.tier + " at " + Number(nextBadge.threshold).toLocaleString() + " followers." : "All milestones reached!");
   $("profileDisplayName").value = p.displayName || "";
   $("profileBio").value = p.bio || "";
   $("profilePronouns").value = p.pronouns || "";
@@ -103,7 +129,7 @@ async function saveProfile() {
   if (!signedInUser) { $("profileStatus").textContent = "Sign in first."; return; }
   try {
     $("saveProfile").disabled = true; $("profileStatus").textContent = "Saving profile…";
-    const payload = {displayName:$("profileDisplayName").value, bio:$("profileBio").value, pronouns:$("profilePronouns").value, favoriteGame:$("profileFavoriteGame").value, accent:$("profileAccent").value, bannerUrl:$("profileBannerUrl").value.trim()};
+    const payload = {displayName:$("profileDisplayName").value, bio:$("profileBio").value, pronouns:$("profilePronouns").value, favoriteGame:$("profileFavoriteGame").value, accent:$("profileAccent").value, bannerUrl:$("profileBannerUrl").value.trim(), displayBadge:$("profileBadge").value};
     if (selectedAvatar !== undefined) payload.avatar = selectedAvatar;
     const d = await api("/api/profile", {method:"POST",body:JSON.stringify(payload)});
     applyMyProfile(d.profile); selectedAvatar = undefined; $("profileAvatar").value = "";
@@ -123,7 +149,7 @@ function renderProfile(p) {
   const stats = document.createElement("div"); stats.className = "profile-stats";
   const followers = document.createElement("span"); followers.innerHTML = "<strong></strong> followers"; followers.querySelector("strong").textContent = p.followers;
   const following = document.createElement("span"); following.innerHTML = "<strong></strong> following"; following.querySelector("strong").textContent = p.following;
-  stats.append(followers, following); details.append(name,handle,bio); const extra = document.createElement("p"); extra.className = "small"; extra.textContent = [p.pronouns, p.favoriteGame ? "Favorite game: " + p.favoriteGame : ""].filter(Boolean).join(" · "); if (extra.textContent) details.append(extra); details.append(stats); card.append(img,details); root.append(card);
+  stats.append(followers, following); details.append(name,handle); if (p.displayBadge) details.append(makeCreatorBadge(p.displayBadge)); details.append(bio); const extra = document.createElement("p"); extra.className = "small"; extra.textContent = [p.pronouns, p.favoriteGame ? "Favorite game: " + p.favoriteGame : ""].filter(Boolean).join(" · "); if (extra.textContent) details.append(extra); details.append(stats); card.append(img,details); root.append(card);
   if (signedInUser && !p.isSelf) {
     const actions = document.createElement("div"); actions.className = "profile-actions";
     const button = document.createElement("button"); button.className = "primary"; button.textContent = p.isFollowing ? "Unfollow" : "Follow";
@@ -131,6 +157,7 @@ function renderProfile(p) {
       button.disabled = true;
       try {
         const result = await api("/api/follow", {method:"POST",body:JSON.stringify({username:p.username,action:p.isFollowing?"unfollow":"follow"})});
+        profileCache.delete(String(p.username).toLowerCase());
         updateLocalFollow(p.username, !p.isFollowing);
         renderProfile(result.profile); await loadMyProfile(); renderNotifications();
       } catch(e) { $("profileResult").append(document.createTextNode(e.message)); }
@@ -209,7 +236,12 @@ function renderPosts() {
   const area = $("postFeed");
   const query = $("postSearch").value.trim().toLowerCase();
   const order = $("postSort").value;
-  const posts = cachedPosts.filter(post => (getPostExtras(post.content || "").text + " " + post.username).toLowerCase().includes(query));
+  const activeCategory = $("postCategoryFilter").value;
+  const posts = cachedPosts.filter(post => {
+    const matchesCategory = activeCategory === "all" || postCategory(post) === activeCategory;
+    const searchable = (getPostExtras(post.content || "").text + " " + post.username + " " + POST_CATEGORY_LABELS[postCategory(post)]).toLowerCase();
+    return matchesCategory && searchable.includes(query);
+  });
   posts.sort((a,b) => {
     const delta = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     return order === "oldest" ? delta : -delta;
@@ -218,7 +250,12 @@ function renderPosts() {
   $("postCount").textContent = posts.length + (posts.length === 1 ? " post shown" : " posts shown") + (query ? " · filtered" : "");
   if (!posts.length) {
     const empty = document.createElement("div"); empty.className = "empty";
-    empty.textContent = cachedPosts.length ? "No posts match that search. Try another word." : "No posts yet. Be the first to publish one!";
+    const followingFeed = $("postFeedMode").value === "following";
+    empty.textContent = query || activeCategory !== "all"
+      ? "No posts match these filters. Try another topic or search."
+      : followingFeed
+        ? "No posts from people you follow yet. Visit Find People and follow some creators!"
+        : cachedPosts.length ? "No posts match that search. Try another word." : "No posts yet. Be the first to publish one!";
     area.append(empty); return;
   }
   for (const post of posts) {
@@ -263,9 +300,15 @@ function renderPosts() {
       });
       head.append(remove);
     }
+    const topicTag = document.createElement("button");
+    topicTag.type = "button";
+    topicTag.className = "post-category-tag";
+    topicTag.textContent = "Topic · " + POST_CATEGORY_LABELS[postCategory(post)];
+    topicTag.setAttribute("aria-label", "Filter feed by " + POST_CATEGORY_LABELS[postCategory(post)]);
+    topicTag.addEventListener("click", () => { $("postCategoryFilter").value = postCategory(post); renderPosts(); $("postCategoryFilter").focus(); });
     const body = document.createElement("div"); body.className = "bubble-body"; body.textContent = parsed.text;
     card.dataset.postId=String(post.id||"");
-    card.append(head,body);
+    card.append(head,topicTag,body);
 
     const tools = document.createElement("div"); tools.className="actions post-interactions";
     const react = document.createElement("button"); react.type="button"; react.textContent="♡ Like"; react.disabled=!signedInUser;
@@ -294,7 +337,11 @@ function renderPosts() {
     }
     card.append(tools);
 
-    getProfileCached(post.username).then(profile => { if (profile && profile.avatar && avatar.isConnected) avatar.src = profile.avatar; });
+    getProfileCached(post.username).then(profile => {
+      if (!profile || !authorName.isConnected) return;
+      if (profile.avatar && avatar.isConnected) avatar.src = profile.avatar;
+      if (profile.displayBadge && !authorName.querySelector(".creator-badge-pill")) authorName.append(makeCreatorBadge(profile.displayBadge));
+    });
     if (parsed.extras && parsed.extras.imageUrl) {
       try {
         const url = new URL(parsed.extras.imageUrl);
@@ -402,15 +449,16 @@ function markNotificationsSeen() {
 }
 async function loadPosts() {
   const area = $("postFeed");
-  area.replaceChildren(); const loading = document.createElement("div"); loading.className = "empty"; loading.textContent = "Fetching fresh posts…"; area.append(loading);
-  try { const data = await api("/api/posts"); cachedPosts = Array.isArray(data.posts) ? data.posts : []; renderPosts(); renderNotifications(); await loadNotifications(); }
-  catch(e) { cachedPosts = []; area.replaceChildren(); const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "Couldn't load posts: " + e.message; area.append(empty); $("postCount").textContent = "Feed unavailable"; }
+  const feedMode = signedInUser && $("postFeedMode").value === "following" ? "following" : "explore";
+  area.replaceChildren(); const loading = document.createElement("div"); loading.className = "empty"; loading.textContent = feedMode === "following" ? "Fetching posts from people you follow…" : "Fetching fresh posts…"; area.append(loading);
+  try { const data = await api("/api/posts" + (feedMode === "following" ? "?feed=following" : "")); cachedPosts = Array.isArray(data.posts) ? data.posts : []; renderPosts(); renderNotifications(); await loadNotifications(); }
+  catch(e) { cachedPosts = []; area.replaceChildren(); const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = feedMode === "following" ? "Following feed unavailable: " + e.message : "Couldn't load posts: " + e.message; area.append(empty); $("postCount").textContent = "Feed unavailable"; }
 }
 async function publishPost() {
   if (!signedInUser) { $("postStatus").textContent="Sign in first to publish."; return; }
   let content;
   try { content=encodePostContent(); } catch(e) { $("postStatus").textContent=e.message; return; }
-  try { $("publishPost").disabled=true; $("postStatus").textContent="Publishing…"; await api("/api/posts",{method:"POST",body:JSON.stringify({content})}); $("postComposer").value=""; $("postImageUrl").value=""; updateImagePreview(); localStorage.removeItem(DRAFT_KEY); updateComposerMeta(); $("draftStatus").textContent="Draft cleared after publishing."; $("postStatus").textContent="Posted! Saved on the server."; await loadPosts(); }
+  try { $("publishPost").disabled=true; $("postStatus").textContent="Publishing…"; await api("/api/posts",{method:"POST",body:JSON.stringify({content,category:$("postCategory").value||"general"})}); $("postComposer").value=""; $("postImageUrl").value=""; $("postCategory").value="general"; updateImagePreview(); localStorage.removeItem(DRAFT_KEY); updateComposerMeta(); $("draftStatus").textContent="Draft cleared after publishing."; $("postStatus").textContent="Posted! Saved on the server."; await loadPosts(); }
   catch(e){$("postStatus").textContent=e.message;}
   finally{$("publishPost").disabled=!signedInUser;}
 }
@@ -494,11 +542,13 @@ $("postComposer").addEventListener("input", () => {
 });
 $("postComposer").addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") publishPost(); });
 $("clearDraft").addEventListener("click", () => {
-  $("postComposer").value = ""; $("postImageUrl").value = ""; updateImagePreview(); localStorage.removeItem(DRAFT_KEY); updateComposerMeta();
+  $("postComposer").value = ""; $("postImageUrl").value = ""; $("postCategory").value = "general"; updateImagePreview(); localStorage.removeItem(DRAFT_KEY); updateComposerMeta();
   $("draftStatus").textContent = "Draft cleared."; $("postStatus").textContent = "Your draft was cleared. No post was published.";
   $("postComposer").focus();
 });
 $("postSearch").addEventListener("input", renderPosts);
+$("postFeedMode").addEventListener("change", loadPosts);
+$("postCategoryFilter").addEventListener("change", renderPosts);
 $("postImageUrl").addEventListener("input", updateImagePreview);
 $("profileBannerUrl").addEventListener("input", updateBannerPreview);
 $("imagePreviewImg").addEventListener("load", () => { $("imagePreviewStatus").textContent = "Preview ready. It will be attached when you publish."; });
