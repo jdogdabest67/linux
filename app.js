@@ -22,6 +22,9 @@ function setAccount(user) {
   signedInUser = user;
   $("accountStatus").textContent = user ? "Signed in as @" + user.username + "." : "Not signed in.";
   $("logoutAccount").disabled = !user;
+  $("signedOutAccount").hidden = !!user;
+  $("signedInProfile").hidden = !user;
+  document.querySelectorAll("[data-account-nav]").forEach(button => { button.textContent = user ? "🪪 Profile" : "👤 Account"; });
   $("publishPost").disabled = !user;
   $("saveProfile").disabled = !user;
   $("clearAvatar").disabled = !user;
@@ -40,6 +43,7 @@ async function accountAction(mode) {
     accountToken = data.token; localStorage.setItem(ACCOUNT_TOKEN_KEY, accountToken);
     setAccount(data.user); $("accountPassword").value = "";
     $("accountStatus").textContent = "Welcome, @" + data.user.username + "!";
+    if (window.jdbSelectSection) window.jdbSelectSection("account");
     await loadMyProfile(); await loadPosts();
   } catch (e) { $("accountStatus").textContent = e.message; }
 }
@@ -146,7 +150,7 @@ function encodePostContent() {
     if (!["http:","https:"].includes(parsed.protocol)) throw Error("Image URLs must start with http:// or https://.");
     extras = {imageUrl:parsed.href};
   }
-  if (!text && !extras) throw Error("Write something, attach an image, or create a poll first.");
+  if (!text && !extras) throw Error("Write something or attach an image first.");
   const content = text + (extras ? POST_EXTRA_PREFIX + encodeURIComponent(JSON.stringify(extras)) + POST_EXTRA_SUFFIX : "");
   if (content.length > 1000) throw Error("This post is too large for the current server limit. Shorten the text or image URL.");
   return content;
@@ -225,9 +229,51 @@ async function publishPost() {
   catch(e){$("postStatus").textContent=e.message;}
   finally{$("publishPost").disabled=!signedInUser;}
 }
-$("registerAccount").addEventListener("click",()=>accountAction("register"));
+
+const VIDEO_LIST_KEY = "jdogbrew-social-videos-v01";
+function youtubeId(value) {
+  try {
+    const url = new URL(value);
+    let id = "";
+    if (url.hostname === "youtu.be" || url.hostname.endsWith(".youtu.be")) id = url.pathname.split("/").filter(Boolean)[0] || "";
+    else if (url.hostname === "youtube.com" || url.hostname.endsWith(".youtube.com") || url.hostname === "www.youtube-nocookie.com") {
+      if (url.pathname === "/watch") id = url.searchParams.get("v") || "";
+      else if (/^\/(embed|shorts|live)\//.test(url.pathname)) id = url.pathname.split("/")[2] || "";
+    }
+    return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : "";
+  } catch (_) { return ""; }
+}
+function renderVideos() {
+  const area = $("videoFeed"); area.replaceChildren();
+  let videos = [];
+  try { videos = JSON.parse(localStorage.getItem(VIDEO_LIST_KEY) || "[]"); } catch (_) {}
+  if (!Array.isArray(videos)) videos = [];
+  if (!videos.length) { const empty=document.createElement("div"); empty.className="empty"; empty.textContent="No videos added yet."; area.append(empty); return; }
+  videos.forEach((video,index) => {
+    const card=document.createElement("article"); card.className="bubble";
+    const title=document.createElement("h2"); title.textContent=video.title || "YouTube video";
+    const frame=document.createElement("iframe"); frame.width="560"; frame.height="315"; frame.loading="lazy"; frame.title=video.title || "YouTube video player"; frame.src="https://www.youtube-nocookie.com/embed/"+video.id; frame.allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"; frame.referrerPolicy="strict-origin-when-cross-origin"; frame.allowFullscreen=true; frame.style.cssText="display:block;width:100%;aspect-ratio:16/9;height:auto;border:0;border-radius:12px;margin-top:10px";
+    const remove=document.createElement("button"); remove.type="button"; remove.textContent="Remove"; remove.style.marginTop="10px"; remove.addEventListener("click",()=>{videos.splice(index,1);localStorage.setItem(VIDEO_LIST_KEY,JSON.stringify(videos));renderVideos();$("videoStatus").textContent="Video removed from this device.";});
+    card.append(title,frame,remove); area.append(card);
+  });
+}
+function addVideo() {
+  const input=$("videoUrl"), id=youtubeId(input.value.trim());
+  if (!id) { $("videoStatus").textContent="That doesn't look like a valid YouTube video link. Try a regular video, Shorts, or youtu.be URL."; return; }
+  let videos=[];
+  try { videos=JSON.parse(localStorage.getItem(VIDEO_LIST_KEY)||"[]"); } catch (_) {}
+  if (!Array.isArray(videos)) videos=[];
+  if (videos.some(video=>video.id===id)) { $("videoStatus").textContent="That video is already in your list."; return; }
+  videos.unshift({id,title:"YouTube video",url:input.value.trim(),addedAt:new Date().toISOString()});
+  try { localStorage.setItem(VIDEO_LIST_KEY,JSON.stringify(videos)); }
+  catch (_) { $("videoStatus").textContent="Couldn't save videos in this browser."; return; }
+  input.value=""; $("videoStatus").textContent="Video added! This list is saved only on this device in version 0.1."; renderVideos();
+}
+\n$("addVideo").addEventListener("click",addVideo);\n$("videoUrl").addEventListener("keydown",e=>{if(e.key==="Enter")addVideo();});\n$("registerAccount").addEventListener("click",()=>accountAction("register"));
 $("loginAccount").addEventListener("click",()=>accountAction("login"));
-$("logoutAccount").addEventListener("click",()=>{accountToken="";localStorage.removeItem(ACCOUNT_TOKEN_KEY);setAccount(null);$("accountStatus").textContent="Signed out on this device.";});
+function logOut() { accountToken=""; localStorage.removeItem(ACCOUNT_TOKEN_KEY); setAccount(null); $("accountStatus").textContent="Signed out on this device."; $("profileStatus").textContent="Sign in to edit your profile."; if (window.jdbSelectSection) window.jdbSelectSection("account"); }
+$("logoutAccount").addEventListener("click",logOut);
+$("profileLogout").addEventListener("click",logOut);
 $("publishPost").addEventListener("click",publishPost);
 $("refreshPosts").addEventListener("click",loadPosts);
 $("postComposer").value = localStorage.getItem(DRAFT_KEY) || "";
@@ -254,5 +300,5 @@ $("profileAvatar").addEventListener("change",async e=>{
   catch(err){selectedAvatar=undefined;$("profileStatus").textContent=err.message;e.target.value="";}
 });
 $("clearAvatar").addEventListener("click",()=>{selectedAvatar=null;$("myAvatar").src=fallbackAvatar;$("profileAvatar").value="";$("profileStatus").textContent="Picture will be removed when you save.";});
-setAccount(null); loadPosts(); restoreAccount();
+setAccount(null); renderVideos(); loadPosts(); restoreAccount();
 })();
