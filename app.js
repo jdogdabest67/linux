@@ -308,7 +308,7 @@ async function publishPost() {
   if (!signedInUser) { $("postStatus").textContent="Sign in first to publish."; return; }
   let content;
   try { content=encodePostContent(); } catch(e) { $("postStatus").textContent=e.message; return; }
-  try { $("publishPost").disabled=true; $("postStatus").textContent="Publishing…"; await api("/api/posts",{method:"POST",body:JSON.stringify({content})}); $("postComposer").value=""; $("postImageUrl").value=""; localStorage.removeItem(DRAFT_KEY); updateComposerMeta(); $("draftStatus").textContent="Draft cleared after publishing."; $("postStatus").textContent="Posted! Saved on the server."; await loadPosts(); }
+  try { $("publishPost").disabled=true; $("postStatus").textContent="Publishing…"; await api("/api/posts",{method:"POST",body:JSON.stringify({content})}); $("postComposer").value=""; $("postImageUrl").value=""; updateImagePreview(); localStorage.removeItem(DRAFT_KEY); updateComposerMeta(); $("draftStatus").textContent="Draft cleared after publishing."; $("postStatus").textContent="Posted! Saved on the server."; await loadPosts(); }
   catch(e){$("postStatus").textContent=e.message;}
   finally{$("publishPost").disabled=!signedInUser;}
 }
@@ -330,7 +330,7 @@ $("postComposer").addEventListener("input", () => {
 });
 $("postComposer").addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") publishPost(); });
 $("clearDraft").addEventListener("click", () => {
-  $("postComposer").value = ""; localStorage.removeItem(DRAFT_KEY); updateComposerMeta();
+  $("postComposer").value = ""; $("postImageUrl").value = ""; updateImagePreview(); localStorage.removeItem(DRAFT_KEY); updateComposerMeta();
   $("draftStatus").textContent = "Draft cleared."; $("postStatus").textContent = "Your draft was cleared. No post was published.";
   $("postComposer").focus();
 });
