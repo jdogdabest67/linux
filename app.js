@@ -33,8 +33,14 @@ function setAccount(user) {
 }
 async function restoreAccount() {
   if (!accountToken) { setAccount(null); return; }
-  try { setAccount((await api("/api/me")).user); await loadMyProfile(); }
-  catch (_) { accountToken = ""; localStorage.removeItem(ACCOUNT_TOKEN_KEY); setAccount(null); }
+  try {
+    setAccount((await api("/api/me")).user);
+    await loadMyProfile();
+    // The first feed render can happen before /api/me finishes. Re-render after
+    // restoring the session so Like and Reply controls get the signed-in state.
+    await loadPosts();
+    await loadNotifications();
+  } catch (_) { accountToken = ""; localStorage.removeItem(ACCOUNT_TOKEN_KEY); setAccount(null); }
 }
 async function accountAction(mode) {
   const username = $("accountUsername").value.trim(), password = $("accountPassword").value;
