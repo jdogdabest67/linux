@@ -269,7 +269,10 @@ function addVideo() {
   catch (_) { $("videoStatus").textContent="Couldn't save videos in this browser."; return; }
   input.value=""; $("videoStatus").textContent="Video added! This list is saved only on this device in version 0.1."; renderVideos();
 }
-\n$("addVideo").addEventListener("click",addVideo);\n$("videoUrl").addEventListener("keydown",e=>{if(e.key==="Enter")addVideo();});\n$("registerAccount").addEventListener("click",()=>accountAction("register"));
+
+$("addVideo").addEventListener("click",addVideo);
+$("videoUrl").addEventListener("keydown",e=>{if(e.key==="Enter")addVideo();});
+$("registerAccount").addEventListener("click",()=>accountAction("register"));
 $("loginAccount").addEventListener("click",()=>accountAction("login"));
 function logOut() { accountToken=""; localStorage.removeItem(ACCOUNT_TOKEN_KEY); setAccount(null); $("accountStatus").textContent="Signed out on this device."; $("profileStatus").textContent="Sign in to edit your profile."; if (window.jdbSelectSection) window.jdbSelectSection("account"); }
 $("logoutAccount").addEventListener("click",logOut);
