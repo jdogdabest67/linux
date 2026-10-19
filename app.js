@@ -414,68 +414,18 @@ async function publishPost() {
 }
 
 
-const cachedVideos = [];
-function videoEmbed(url) {
-  try {
-    const u = new URL(url);
-    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
-    let id = "";
-    if (u.hostname === "youtu.be") id = u.pathname.slice(1).split("/")[0];
-    else if (["youtube.com","www.youtube.com","m.youtube.com","music.youtube.com"].includes(u.hostname)) {
-      if (u.pathname === "/watch") id = u.searchParams.get("v") || "";
-      else if (u.pathname.startsWith("/shorts/") || u.pathname.startsWith("/embed/")) id = u.pathname.split("/")[2] || "";
-    }
-    if (/^[A-Za-z0-9_-]{6,20}$/.test(id)) return "https://www.youtube-nocookie.com/embed/" + id;
-    if (u.hostname === "vimeo.com" || u.hostname === "www.vimeo.com") {
-      const vimeoId = u.pathname.split("/").filter(Boolean)[0] || "";
-      if (/^\d{5,15}$/.test(vimeoId)) return "https://player.vimeo.com/video/" + vimeoId;
-    }
-  } catch (_) {}
-  return null;
+const cachedGroups = [];
+function renderGroups(){
+ const area=$("groupFeed");area.replaceChildren();const query=$("groupSearch").value.trim().toLowerCase(),filter=$("groupFilter").value,me=signedInUser?signedInUser.username.toLowerCase():"";
+ const list=cachedGroups.filter(g=>{const owner=String(g.owner||"").toLowerCase()===me,joined=Array.isArray(g.members)&&g.members.some(n=>String(n).toLowerCase()===me);return(filter==="all"||(filter==="joined"&&me&&joined)||(filter==="created"&&me&&owner))&&(!query||[g.name,g.description,g.owner].some(v=>String(v||"").toLowerCase().includes(query)));});
+ $("groupCount").textContent=list.length+" group"+(list.length===1?"":"s");
+ if(!list.length){const e=document.createElement("div");e.className="empty";e.textContent=cachedGroups.length?"No groups match those filters yet.":"No groups yet. Create the first community! 👥";area.append(e);return;}
+ for(const g of list){const card=document.createElement("article");card.className="bubble";const head=document.createElement("div");head.className="bubble-head";const owner=document.createElement("span");owner.textContent="Created by @"+g.owner;const time=document.createElement("time");time.textContent=new Date(g.createdAt).toLocaleDateString();head.append(owner,time);const title=document.createElement("h3");title.textContent=g.name;title.style.marginTop="0";const desc=document.createElement("p");desc.className="bubble-body";desc.textContent=g.description||"No description yet.";const n=Array.isArray(g.members)?g.members.length:0,meta=document.createElement("p");meta.className="small";meta.textContent=n+" member"+(n===1?"":"s");card.append(head,title,desc,meta);const actions=document.createElement("div");actions.className="actions";const isOwner=!!me&&String(g.owner).toLowerCase()===me,isMember=!!me&&Array.isArray(g.members)&&g.members.some(x=>String(x).toLowerCase()===me);
+ if(!isOwner){const b=document.createElement("button");b.type="button";b.textContent=isMember?"Leave group":"Join group";b.disabled=!signedInUser;b.addEventListener("click",async()=>{b.disabled=true;try{const action=isMember?"leave":"join";await api("/api/groups/"+encodeURIComponent(g.id)+"/member",{method:"POST",body:JSON.stringify({action})});$("groupStatus").textContent=action==="join"?"You joined "+g.name+".":"You left "+g.name+".";await loadGroups();}catch(e){$("groupStatus").textContent=e.message;b.disabled=false;}});actions.append(b);}
+ if(isOwner){const b=document.createElement("button");b.type="button";b.textContent="Delete group";b.addEventListener("click",async()=>{if(!confirm("Delete the group '"+g.name+"'? This cannot be undone."))return;b.disabled=true;try{await api("/api/groups/"+encodeURIComponent(g.id),{method:"DELETE"});$("groupStatus").textContent="Group deleted.";await loadGroups();}catch(e){$("groupStatus").textContent=e.message;b.disabled=false;}});actions.append(b);}card.append(actions);area.append(card);}
 }
-function renderVideos() {
-  const area=$("videoFeed"); area.replaceChildren();
-  const query=$("videoSearch").value.trim().toLowerCase(), filter=$("videoFilter").value;
-  let list=cachedVideos.filter(v => (filter==="all" || (filter==="mine" ? signedInUser && v.username.toLowerCase()===signedInUser.username.toLowerCase() : v.type===filter)) &&
-    (!query || [v.title,v.description,v.username].some(s=>String(s||"").toLowerCase().includes(query))));
-  $("videoCount").textContent=list.length+" video"+(list.length===1?"":"s");
-  if(!list.length){const empty=document.createElement("div");empty.className="empty";empty.textContent=cachedVideos.length?"No videos match those filters yet.":"No videos shared yet. The first upload is a link, not a file. 🎬";area.append(empty);return;}
-  for(const v of list){
-    const card=document.createElement("article");card.className="bubble";
-    const head=document.createElement("div");head.className="bubble-head";
-    const who=document.createElement("button");who.type="button";who.textContent="@"+v.username;who.style.cssText="padding:0;border:0;background:transparent;color:#b9e5ff";
-    who.addEventListener("click",()=>{if($("profileLookup")){$("profileLookup").value=v.username;if(window.jdbSelectSection)window.jdbSelectSection("people");$("lookupProfile").click();}});
-    const time=document.createElement("time");time.textContent=new Date(v.createdAt).toLocaleString();head.append(who,time);
-    const title=document.createElement("h3");title.textContent=v.title;title.style.marginTop="0";
-    const kind=document.createElement("span");kind.className="pill";kind.textContent=v.type==="short"?"SHORT / CLIP":"FULL VIDEO";
-    card.append(head,title,kind);
-    if(v.description){const desc=document.createElement("p");desc.className="bubble-body";desc.textContent=v.description;card.append(desc);}
-    const embed=videoEmbed(v.url);
-    if(embed){const frame=document.createElement("iframe");frame.src=embed;frame.title=v.title;frame.loading="lazy";frame.allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";frame.allowFullscreen=true;frame.referrerPolicy="strict-origin-when-cross-origin";frame.style.cssText="display:block;width:100%;aspect-ratio:16/9;border:1px solid #344363;border-radius:12px;margin-top:12px;background:#080d20";card.append(frame);}
-    else if (/\.(mp4|webm|ogg)(?:$|[?#])/i.test(v.url)){const player=document.createElement("video");player.controls=true;player.preload="metadata";player.src=v.url;player.style.cssText="display:block;width:100%;max-height:520px;margin-top:12px";card.append(player);}
-    else {const link=document.createElement("a");link.href=v.url;link.target="_blank";link.rel="noopener noreferrer";link.textContent="▶ Watch video on its site";link.style.display="inline-block";link.style.marginTop="12px";card.append(link);}
-    if(signedInUser && v.username.toLowerCase()===signedInUser.username.toLowerCase()){
-      const del=document.createElement("button");del.type="button";del.textContent="Delete video";del.style.marginTop="10px";
-      del.addEventListener("click",async()=>{if(!confirm("Delete this video from your channel?"))return;del.disabled=true;try{await api("/api/videos/"+encodeURIComponent(v.id),{method:"DELETE"});$("videoStatus").textContent="Video deleted.";await loadVideos();}catch(e){$("videoStatus").textContent=e.message;del.disabled=false;}});
-      card.append(del);
-    }
-    area.append(card);
-  }
-}
-async function loadVideos(){
-  const area=$("videoFeed");area.replaceChildren();const loading=document.createElement("div");loading.className="empty";loading.textContent="Fetching the video shelf…";area.append(loading);
-  try{const data=await api("/api/videos");cachedVideos.splice(0,cachedVideos.length,...(Array.isArray(data.videos)?data.videos:[]));renderVideos();}
-  catch(e){cachedVideos.splice(0);area.replaceChildren();const empty=document.createElement("div");empty.className="empty";empty.textContent="Couldn't load videos: "+e.message;area.append(empty);$("videoCount").textContent="Video shelf unavailable";}
-}
-async function publishVideo(){
-  if(!signedInUser){$("videoStatus").textContent="Sign in first to share a video.";return;}
-  const title=$("videoTitle").value.trim(),description=$("videoDescription").value.trim(),url=$("videoUrl").value.trim(),type=$("videoType").value;
-  if(!title){$("videoStatus").textContent="Give the video a title first.";return;}
-  try{const parsed=new URL(url);if(!["http:","https:"].includes(parsed.protocol))throw Error();}catch(_){$("videoStatus").textContent="Enter a valid public http or https video URL.";return;}
-  try{$("publishVideo").disabled=true;$("videoStatus").textContent="Sharing video…";await api("/api/videos",{method:"POST",body:JSON.stringify({title,description,url,type})});$("videoTitle").value="";$("videoDescription").value="";$("videoUrl").value="";$("videoStatus").textContent="Video shared and linked to @"+signedInUser.username+".";await loadVideos();}
-  catch(e){$("videoStatus").textContent=e.message;}
-  finally{$("publishVideo").disabled=!signedInUser;}
-}
+async function loadGroups(){const area=$("groupFeed");area.replaceChildren();const e=document.createElement("div");e.className="empty";e.textContent="Fetching communities…";area.append(e);try{const data=await api("/api/groups");cachedGroups.splice(0,cachedGroups.length,...(Array.isArray(data.groups)?data.groups:[]));renderGroups();}catch(err){cachedGroups.splice(0);area.replaceChildren();const e2=document.createElement("div");e2.className="empty";e2.textContent="Couldn't load groups: "+err.message;area.append(e2);$("groupCount").textContent="Groups unavailable";}}
+async function createGroup(){if(!signedInUser){$("groupStatus").textContent="Sign in first to create a group.";return;}const name=$("groupName").value.trim(),description=$("groupDescription").value.trim();if(name.length<2||name.length>40){$("groupStatus").textContent="Group names must be 2–40 characters.";return;}try{$("createGroup").disabled=true;$("groupStatus").textContent="Creating your group…";await api("/api/groups",{method:"POST",body:JSON.stringify({name,description})});$("groupName").value="";$("groupDescription").value="";$("groupStatus").textContent="Group created! Your community has officially spawned. 🎉";await loadGroups();}catch(e){$("groupStatus").textContent=e.message;}finally{$("createGroup").disabled=!signedInUser;}}
 
 function logOut() { accountToken=""; localStorage.removeItem(ACCOUNT_TOKEN_KEY); setAccount(null); $("accountStatus").textContent="Signed out on this device."; $("profileStatus").textContent="Sign in to edit your profile."; if (window.jdbSelectSection) window.jdbSelectSection("account"); }
 $("registerAccount").addEventListener("click", () => accountAction("register"));
@@ -483,10 +433,10 @@ $("loginAccount").addEventListener("click", () => accountAction("login"));
 $("logoutAccount").addEventListener("click",logOut);
 $("profileLogout").addEventListener("click",logOut);
 $("publishPost").addEventListener("click",publishPost);
-$("publishVideo").addEventListener("click",publishVideo);
-$("refreshVideos").addEventListener("click",loadVideos);
-$("videoSearch").addEventListener("input",renderVideos);
-$("videoFilter").addEventListener("change",renderVideos);
+$("createGroup").addEventListener("click",createGroup);
+$("refreshGroups").addEventListener("click",loadGroups);
+$("groupSearch").addEventListener("input",renderGroups);
+$("groupFilter").addEventListener("change",renderGroups);
 $("refreshPosts").addEventListener("click",loadPosts);
 $("refreshNotifications").addEventListener("click",loadPosts);
 $("clearNotifications").addEventListener("click",markNotificationsSeen);
@@ -520,5 +470,5 @@ $("profileAvatar").addEventListener("change",async e=>{
   catch(err){selectedAvatar=undefined;$("profileStatus").textContent=err.message;e.target.value="";}
 });
 $("clearAvatar").addEventListener("click",()=>{selectedAvatar=null;$("myAvatar").src=fallbackAvatar;$("profileAvatar").value="";$("profileStatus").textContent="Picture will be removed when you save.";});
-setAccount(null); renderNotifications(); loadPosts(); loadVideos(); restoreAccount();
+setAccount(null); renderNotifications(); loadPosts(); loadGroups(); restoreAccount();
 })();
