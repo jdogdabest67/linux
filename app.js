@@ -116,24 +116,59 @@ async function lookupProfile() {
   try { $("profileResult").textContent = "Loading profile…"; renderProfile((await api("/api/profile/" + encodeURIComponent(username))).profile); }
   catch(e) { $("profileResult").textContent = e.message; }
 }
+const DRAFT_KEY = "jdogbrew-social-post-draft-v1";
+let cachedPosts = [];
+function updateComposerMeta() {
+  const count = $("postComposer").value.length;
+  $("postCharCount").textContent = count + " / 1000";
+  $("postCharCount").className = count > 900 ? "count-near-limit" : "";
+}
+function renderPosts() {
+  const area = $("postFeed");
+  const query = $("postSearch").value.trim().toLowerCase();
+  const order = $("postSort").value;
+  const posts = cachedPosts.filter(post => (post.content + " " + post.username).toLowerCase().includes(query));
+  posts.sort((a,b) => {
+    const delta = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    return order === "oldest" ? delta : -delta;
+  });
+  area.replaceChildren();
+  $("postCount").textContent = posts.length + (posts.length === 1 ? " post shown" : " posts shown") + (query ? " · filtered" : "");
+  if (!posts.length) {
+    const empty = document.createElement("div"); empty.className = "empty";
+    empty.textContent = cachedPosts.length ? "No posts match that search. Try another word." : "No posts yet. Be the first to publish one!";
+    area.append(empty); return;
+  }
+  for (const post of posts) {
+    const card = document.createElement("article"); card.className = "bubble";
+    const head = document.createElement("div"); head.className = "bubble-head";
+    const who = document.createElement("button"); who.textContent = "@" + post.username;
+    who.setAttribute("aria-label", "View @" + post.username + "'s profile");
+    who.addEventListener("click", () => { $("profileLookup").value = post.username; lookupProfile(); $("profileResult").scrollIntoView({behavior:"smooth",block:"center"}); });
+    const time = document.createElement("time"); const date = new Date(post.createdAt);
+    time.textContent = date.toLocaleString(); time.title = date.toLocaleString();
+    const copy = document.createElement("button"); copy.type = "button"; copy.textContent = "Copy text";
+    copy.addEventListener("click", async () => {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(post.content); $("postStatus").textContent = "Post text copied."; }
+        else { $("postStatus").textContent = "Copy isn't available in this browser. You can select the post text manually."; }
+      } catch (_) { $("postStatus").textContent = "Copy wasn't available. You can select the post text manually."; }
+    });
+    head.append(who,time,copy);
+    const body = document.createElement("div"); body.className = "bubble-body"; body.textContent = post.content;
+    card.append(head,body); area.append(card);
+  }
+}
 async function loadPosts() {
   const area = $("postFeed");
-  try {
-    const data = await api("/api/posts"); area.replaceChildren();
-    if (!data.posts.length) { const empty=document.createElement("div"); empty.className="empty"; empty.textContent="No posts yet. Be the first to publish one!"; area.append(empty); return; }
-    for (const post of data.posts) {
-      const card=document.createElement("article"); card.className="bubble";
-      const head=document.createElement("div"); head.className="bubble-head";
-      const who=document.createElement("button"); who.textContent="@"+post.username; who.addEventListener("click",()=>{$("profileLookup").value=post.username;lookupProfile();$("profileResult").scrollIntoView({behavior:"smooth",block:"center"});});
-      const time=document.createElement("time"); time.textContent=new Date(post.createdAt).toLocaleString();
-      head.append(who,time); const body=document.createElement("div"); body.className="bubble-body"; body.textContent=post.content; card.append(head,body); area.append(card);
-    }
-  } catch(e) { area.replaceChildren(); const empty=document.createElement("div"); empty.className="empty"; empty.textContent="Couldn't load posts: "+e.message; area.append(empty); }
+  area.replaceChildren(); const loading = document.createElement("div"); loading.className = "empty"; loading.textContent = "Fetching fresh posts…"; area.append(loading);
+  try { const data = await api("/api/posts"); cachedPosts = Array.isArray(data.posts) ? data.posts : []; renderPosts(); }
+  catch(e) { cachedPosts = []; area.replaceChildren(); const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "Couldn't load posts: " + e.message; area.append(empty); $("postCount").textContent = "Feed unavailable"; }
 }
 async function publishPost() {
   if (!signedInUser) { $("postStatus").textContent="Sign in first to publish."; return; }
   const content=$("postComposer").value.trim(); if(!content){$("postStatus").textContent="Write something first.";return;}
-  try { $("publishPost").disabled=true; $("postStatus").textContent="Publishing…"; await api("/api/posts",{method:"POST",body:JSON.stringify({content})}); $("postComposer").value=""; $("postStatus").textContent="Posted! Saved on the server."; await loadPosts(); }
+  try { $("publishPost").disabled=true; $("postStatus").textContent="Publishing…"; await api("/api/posts",{method:"POST",body:JSON.stringify({content})}); $("postComposer").value=""; localStorage.removeItem(DRAFT_KEY); updateComposerMeta(); $("draftStatus").textContent="Draft cleared after publishing."; $("postStatus").textContent="Posted! Saved on the server."; await loadPosts(); }
   catch(e){$("postStatus").textContent=e.message;}
   finally{$("publishPost").disabled=!signedInUser;}
 }
@@ -142,6 +177,21 @@ $("loginAccount").addEventListener("click",()=>accountAction("login"));
 $("logoutAccount").addEventListener("click",()=>{accountToken="";localStorage.removeItem(ACCOUNT_TOKEN_KEY);setAccount(null);$("accountStatus").textContent="Signed out on this device.";});
 $("publishPost").addEventListener("click",publishPost);
 $("refreshPosts").addEventListener("click",loadPosts);
+$("postComposer").value = localStorage.getItem(DRAFT_KEY) || "";
+updateComposerMeta();
+$("postComposer").addEventListener("input", () => {
+  updateComposerMeta();
+  try { localStorage.setItem(DRAFT_KEY, $("postComposer").value); $("draftStatus").textContent = $("postComposer").value ? "Draft saved on this device." : "Drafts save on this device."; }
+  catch (_) { $("draftStatus").textContent = "Draft saving isn't available in this browser."; }
+});
+$("postComposer").addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") publishPost(); });
+$("clearDraft").addEventListener("click", () => {
+  $("postComposer").value = ""; localStorage.removeItem(DRAFT_KEY); updateComposerMeta();
+  $("draftStatus").textContent = "Draft cleared."; $("postStatus").textContent = "Your draft was cleared. No post was published.";
+  $("postComposer").focus();
+});
+$("postSearch").addEventListener("input", renderPosts);
+$("postSort").addEventListener("change", renderPosts);
 $("saveProfile").addEventListener("click",saveProfile);
 $("lookupProfile").addEventListener("click",lookupProfile);
 $("profileLookup").addEventListener("keydown",e=>{if(e.key==="Enter")lookupProfile();});
