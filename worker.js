@@ -128,13 +128,13 @@ export class SignalStore {
     }
     if (url.pathname === "/api/profile" && request.method === "GET") {
       const user = await this.authUser(request);
-      return user ? this.profileResponse(user.username) : json({ ok: false, error: "Sign in required." }, 401);
+      return user ? this.profileResponse(user.username, user.username) : json({ ok: false, error: "Sign in required." }, 401);
     }
     if (url.pathname === "/api/profile" && request.method === "POST") return this.updateProfile(request);
     if (url.pathname.startsWith("/api/profile/") && request.method === "GET") {
       const username = decodeURIComponent(url.pathname.slice("/api/profile/".length));
       if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return json({ ok: false, error: "Invalid username." }, 400);
-      return this.profileResponse(username);
+      const viewer = await this.authUser(request);\n      return this.profileResponse(username, viewer ? viewer.username : "");
     }
     if (url.pathname === "/api/follow" && request.method === "POST") return this.followUser(request);
     if (url.pathname === "/api/posts" && request.method === "GET") {
@@ -170,7 +170,7 @@ export class SignalStore {
     return json({ ok: false, error: "Not found." }, 404);
   }
 
-  async profileResponse(username) {
+  async profileResponse(username, viewerUsername = "") {
     const users = (await this.ctx.storage.get("social-users")) || {};
     const key = username.toLowerCase();
     const user = users[key];
@@ -180,7 +180,7 @@ export class SignalStore {
     const profile = profiles[key] || {};
     const followers = Object.values(follows).filter(list => list.includes(key)).length;
     const following = (follows[key] || []).length;
-    const viewer = null;
+    const isFollowing = !!viewerUsername && (follows[viewerUsername.toLowerCase()] || []).includes(key);
     return json({ ok: true, profile: {
       username: user.username,
       displayName: profile.displayName || user.username,
@@ -213,7 +213,7 @@ export class SignalStore {
       avatar: body.avatar === null ? "" : (avatar || prior.avatar || "")
     };
     await this.ctx.storage.put("social-profiles", profiles);
-    return this.profileResponse(user.username);
+    return this.profileResponse(user.username, user.username);
   }
 
   async followUser(request) {
@@ -236,7 +236,7 @@ export class SignalStore {
     if (action === "follow") list.add(targetKey); else list.delete(targetKey);
     follows[sourceKey] = Array.from(list);
     await this.ctx.storage.put("social-follows", follows);
-    return this.profileResponse(target);
+    return this.profileResponse(target, user.username);
   }
 
   async hashPassword(password, salt) {
