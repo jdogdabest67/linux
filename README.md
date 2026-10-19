@@ -9,7 +9,8 @@ JDog Social is an experimental community site for posts, profiles, followers, gr
 
 - Account registration and sign-in; usernames are 3–20 letters, numbers, or underscores.
 - Custom profiles with display names, bios, pronouns, favorite games, accent colors, avatars, and banner-image URLs.
-- Public posts with optional image URLs, likes/reactions, replies, and post deletion by the author.
+- Public posts with optional image URLs, topic categories, an Explore feed and a Following feed, likes/reactions, replies, and post deletion by the author.
+- Server-calculated Dog Bone creator badges at 10K, 100K, 1M, and 10M followers; eligible creators can choose which earned badge to display.
 - Follow/unfollow, people lookup, direct interaction notifications, and basic block/report controls.
 - Groups with owners, member lists, separate group pages, and group post feeds.
 
