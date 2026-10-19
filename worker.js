@@ -126,6 +126,17 @@ export class SignalStore {
       const user = await this.authUser(request);
       return user ? json({ ok: true, user: { username: user.username } }) : json({ ok: false, error: "Sign in required." }, 401);
     }
+    if (url.pathname === "/api/profile" && request.method === "GET") {
+      const user = await this.authUser(request);
+      return user ? this.profileResponse(user.username) : json({ ok: false, error: "Sign in required." }, 401);
+    }
+    if (url.pathname === "/api/profile" && request.method === "POST") return this.updateProfile(request);
+    if (url.pathname.startsWith("/api/profile/") && request.method === "GET") {
+      const username = decodeURIComponent(url.pathname.slice("/api/profile/".length));
+      if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return json({ ok: false, error: "Invalid username." }, 400);
+      return this.profileResponse(username);
+    }
+    if (url.pathname === "/api/follow" && request.method === "POST") return this.followUser(request);
     if (url.pathname === "/api/posts" && request.method === "GET") {
       const posts = (await this.ctx.storage.get("social-posts")) || [];
       return json({ ok: true, posts: posts.slice(-100).reverse() });
@@ -157,6 +168,75 @@ export class SignalStore {
       return json({ ok: true, messages: all.filter(m => m.session === session).slice(-50) });
     }
     return json({ ok: false, error: "Not found." }, 404);
+  }
+
+  async profileResponse(username) {
+    const users = (await this.ctx.storage.get("social-users")) || {};
+    const key = username.toLowerCase();
+    const user = users[key];
+    if (!user) return json({ ok: false, error: "User not found." }, 404);
+    const profiles = (await this.ctx.storage.get("social-profiles")) || {};
+    const follows = (await this.ctx.storage.get("social-follows")) || {};
+    const profile = profiles[key] || {};
+    const followers = Object.values(follows).filter(list => list.includes(key)).length;
+    const following = (follows[key] || []).length;
+    const viewer = null;
+    return json({ ok: true, profile: {
+      username: user.username,
+      displayName: profile.displayName || user.username,
+      bio: profile.bio || "",
+      avatar: profile.avatar || "",
+      followers,
+      following
+    }});
+  }
+
+  async updateProfile(request) {
+    const user = await this.authUser(request);
+    if (!user) return json({ ok: false, error: "Sign in required." }, 401);
+    let body;
+    try { body = await request.json(); } catch { return json({ ok: false, error: "Expected JSON." }, 400); }
+    const displayName = typeof body.displayName === "string" ? body.displayName.trim() : "";
+    const bio = typeof body.bio === "string" ? body.bio.trim() : "";
+    const avatar = typeof body.avatar === "string" ? body.avatar : "";
+    if (displayName.length > 40) return json({ ok: false, error: "Display name must be 40 characters or fewer." }, 400);
+    if (bio.length > 160) return json({ ok: false, error: "Bio must be 160 characters or fewer." }, 400);
+    if (avatar && (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(avatar) || avatar.length > 220000)) {
+      return json({ ok: false, error: "Choose a PNG, JPEG, or WebP image under the profile-picture size limit." }, 400);
+    }
+    const key = user.username.toLowerCase();
+    const profiles = (await this.ctx.storage.get("social-profiles")) || {};
+    const prior = profiles[key] || {};
+    profiles[key] = {
+      displayName: displayName || user.username,
+      bio,
+      avatar: body.avatar === null ? "" : (avatar || prior.avatar || "")
+    };
+    await this.ctx.storage.put("social-profiles", profiles);
+    return this.profileResponse(user.username);
+  }
+
+  async followUser(request) {
+    const user = await this.authUser(request);
+    if (!user) return json({ ok: false, error: "Sign in required." }, 401);
+    let body;
+    try { body = await request.json(); } catch { return json({ ok: false, error: "Expected JSON." }, 400); }
+    const target = typeof body.username === "string" ? body.username.trim() : "";
+    const action = body.action;
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(target) || !["follow", "unfollow"].includes(action)) {
+      return json({ ok: false, error: "Invalid follow request." }, 400);
+    }
+    const sourceKey = user.username.toLowerCase();
+    const targetKey = target.toLowerCase();
+    if (sourceKey === targetKey) return json({ ok: false, error: "You can't follow yourself." }, 400);
+    const users = (await this.ctx.storage.get("social-users")) || {};
+    if (!users[targetKey]) return json({ ok: false, error: "User not found." }, 404);
+    const follows = (await this.ctx.storage.get("social-follows")) || {};
+    const list = new Set(follows[sourceKey] || []);
+    if (action === "follow") list.add(targetKey); else list.delete(targetKey);
+    follows[sourceKey] = Array.from(list);
+    await this.ctx.storage.put("social-follows", follows);
+    return this.profileResponse(target);
   }
 
   async hashPassword(password, salt) {
