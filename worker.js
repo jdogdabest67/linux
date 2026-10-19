@@ -49,6 +49,12 @@ export default {
       });
     }
 
+    // Secret-protected, read-only export for backing up the existing social Durable Object.
+    if (url.pathname === "/api/admin/export") {
+      const stub = env.SIGNAL_STORE.get(env.SIGNAL_STORE.idFromName("jdogbrew-social-data-v1"));
+      return ensureCors(await stub.fetch(new Request("https://social-store.internal/api/admin/export", request)));
+    }
+
     if (url.pathname === "/api/socket") {
       if (request.headers.get("Upgrade") !== "websocket") {
         return json({ ok: false, error: "Use a WebSocket connection for /api/socket." }, 426);
@@ -111,6 +117,43 @@ export class SignalStore {
 
   async fetch(request) {
     const url = new URL(request.url);
+
+    // Read-only backup export. Configure BACKUP_SECRET as a Worker secret before deploying.
+    if (url.pathname === "/api/admin/export") {
+      if (request.method !== "GET") return json({ ok: false, error: "Use GET for backup export." }, 405);
+      const backupSecret = this.env && this.env.BACKUP_SECRET;
+      if (typeof backupSecret !== "string" || backupSecret.length < 32) {
+        return json({ ok: false, error: "Backup export is not configured." }, 503);
+      }
+      if ((request.headers.get("Authorization") || "") !== `Bearer ${backupSecret}`) {
+        return json({ ok: false, error: "Unauthorized." }, 401);
+      }
+      // Sessions are intentionally excluded: anyone obtaining a backup should not receive live login tokens.
+      const exportKeys = [
+        "social-users", "social-profiles", "social-follows", "social-posts",
+        "social-comments", "social-reactions", "social-reports", "social-blocks",
+        "social-notifications", "social-groups", "social-group-posts"
+      ];
+      const data = {};
+      for (const key of exportKeys) data[key] = (await this.ctx.storage.get(key)) ?? null;
+      const exportedAt = new Date().toISOString();
+      return new Response(JSON.stringify({
+        ok: true,
+        format: "jdog-social-do-backup-v1",
+        exportedAt,
+        omittedKeys: ["social-sessions"],
+        data
+      }), {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json; charset=utf-8",
+          "Content-Disposition": `attachment; filename="jdog-social-backup-${Date.now()}.json"`,
+          "Cache-Control": "no-store"
+        }
+      });
+    }
+
     if (url.pathname === "/api/socket") {
       if (request.headers.get("Upgrade") !== "websocket") {
         return json({ ok: false, error: "WebSocket upgrade required." }, 426);

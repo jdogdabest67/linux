@@ -10,5 +10,12 @@
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["SignalStore"] }
-  ]
+  ],
+  "previews": {
+    "durable_objects": {
+      "bindings": [
+        { "name": "SIGNAL_STORE", "class_name": "SignalStore" }
+      ]
+    }
+  }
 }
