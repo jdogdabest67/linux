@@ -73,7 +73,7 @@ async function accountAction(mode) {
 }
 function updateBannerPreview() {
   const url = $("profileBannerUrl").value.trim(), preview = $("myBannerPreview");
-  let valid = /^data:image\\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(url);
+  let valid = /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(url);
   try { const parsed = new URL(url); valid = valid || ["http:", "https:"].includes(parsed.protocol); } catch (_) {}
   preview.hidden = !valid;
   preview.style.backgroundImage = valid ? "url(" + JSON.stringify(url) + ")" : "";
