@@ -29,7 +29,7 @@ function setAccount(user) {
   $("saveProfile").disabled = !user;
   $("clearAvatar").disabled = !user;
   updateNotificationStatus();
-  if (user) loadNotifications();
+  if (user) { loadNotifications(); loadBlockedUsers(); } else { loadBlockedUsers(); }
 }
 async function restoreAccount() {
   if (!accountToken) { setAccount(null); return; }
@@ -326,6 +326,16 @@ function updateNotificationStatus() {
 }
 
 let serverNotifications=[];
+
+async function loadBlockedUsers(){
+ const area=$("blockedUsersList");if(!area)return;area.replaceChildren();
+ if(!signedInUser){const empty=document.createElement("div");empty.className="empty";empty.textContent="Sign in to manage blocked accounts.";area.append(empty);return;}
+ try{
+  const data=await api("/api/blocks"), users=data.users||[];
+  if(!users.length){const empty=document.createElement("div");empty.className="empty";empty.textContent="You haven't blocked anyone. The Duck remains uncontained.";area.append(empty);return;}
+  for(const username of users){const row=document.createElement("div");row.className="bubble";const label=document.createElement("strong");label.textContent="@"+username;const button=document.createElement("button");button.type="button";button.textContent="Unblock";button.addEventListener("click",async()=>{button.disabled=true;try{await api("/api/blocks",{method:"POST",body:JSON.stringify({username,action:"unblock"})});await loadBlockedUsers();await loadPosts();}catch(e){$("profileResult").textContent=e.message;button.disabled=false;}});row.append(label,button);area.append(row);}
+ }catch(e){const empty=document.createElement("div");empty.className="empty";empty.textContent=e.message;area.append(empty);}
+}
 async function loadNotifications(){
   const area=$("notificationFeed");if(!area)return;
   let direct=area.querySelector(".direct-notifications");
@@ -404,6 +414,7 @@ $("publishPost").addEventListener("click",publishPost);
 $("refreshPosts").addEventListener("click",loadPosts);
 $("refreshNotifications").addEventListener("click",loadPosts);
 $("clearNotifications").addEventListener("click",markNotificationsSeen);
+$("refreshBlockedUsers")?.addEventListener("click",loadBlockedUsers);
 $("postComposer").value = localStorage.getItem(DRAFT_KEY) || "";
 updateComposerMeta();
 updateImagePreview();
