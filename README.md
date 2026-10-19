@@ -1,36 +1,33 @@
-# J-DogBrew Social × JoyGPT
+# JDog Social
 
-J-DogBrew Social is the early social layer; JoyGPT provides browser-to-browser messaging and a low-rate camera snapshot feed.
+JDog Social is an experimental community site for posts, profiles, followers, groups, and creator features.
 
-Live site: https://jdogdabest67.github.io/linux/
+**Live site:** https://jdogdabest67.github.io/linux/  
+**Feature roadmap:** [ROADMAP.md](./ROADMAP.md)
 
-## Message formats
-- Plain text
-- Markdown text displayed safely as text
-- Structured JSON
-- Event/data objects
-- Metadata objects
-- Reactions/emoji
-- Status updates
-- Files up to 10 MB, including binary files, images, audio, video, documents, and archives
+## What is in the social app
 
-Typed JSON payloads are limited to 12 KiB. Messages relay to connected browsers in the same session. The session code is not strong authentication and messages are not end-to-end encrypted. Use test data only.
+- Account registration and sign-in; usernames are 3–20 letters, numbers, or underscores.
+- Custom profiles with display names, bios, pronouns, favorite games, accent colors, avatars, and banner-image URLs.
+- Public posts with optional image URLs, likes/reactions, replies, and post deletion by the author.
+- Follow/unfollow, people lookup, direct interaction notifications, and basic block/report controls.
+- Groups with owners, member lists, separate group pages, and group post feeds.
 
-## Accounts and permanent posts
-- Regular account registration and sign-in; usernames are 3–20 letters, numbers, or underscores.
-- Passwords are salted and hashed server-side with PBKDF2-HMAC-SHA-256.
-- Login sessions are bearer tokens saved in this browser for up to 30 days. Sign out to remove the token from this device.
-- Public posts persist in Durable Object storage. The newest 100 posts are shown; storage retains up to 1,000.
-- This prototype has no admin roles, password reset, email verification, moderation dashboard, or rate limiting. Use a unique password and do not treat it as a production-secure social network.
+This is still a prototype. The repository contains the frontend, while worker.js is deployed separately as a Cloudflare Worker using Durable Object storage. A feature present in the repository is not proof it is deployed or working on the public site. Check the live API and deployment after backend updates.
 
-## Live Feed v0.2
-This is a prototype snapshot stream, not continuous video. After the user explicitly presses Start Live Feed and grants camera permission, the browser captures compressed JPEG snapshots at about one frame per second and sends them over the existing WebSocket binary relay. Frames are limited to 180 KiB. Users can choose a front/back camera and balanced, sharper, or smaller snapshots, with a compression fallback. No audio is captured. Stop feed shuts down camera tracks. Timing depends on device performance and network conditions.
+## JoyGPT experiment
 
-## Deployments
-GitHub Pages deploys index.html and app.js. The backend in worker.js is a separate Cloudflare Worker using the existing Durable Object binding in wrangler.jsonc. Deploy both separately when needed. The new page expects /api/health to return version social-v1; deploy worker.js to Cloudflare if the page reports an old version.
+This repository also contains a separate JoyGPT WebSocket relay and low-rate camera snapshot experiment. It is not the same thing as JDog Social's posts or groups. The relay is not end-to-end encrypted or suitable for private messages, and the camera feature sends snapshots from the device camera rather than direct console capture. Use test data only.
 
-## Limitations
-- This page does not control a game or create a Switch controller connection.
-- Sending a .bin file transfers bytes only; it does not import or validate game save data.
-- Live Feed sends snapshots from the device camera, not direct console screen capture or audio.
-- The relay is not a private or encrypted messenger. Do not send sensitive information.
+## Current prototype limitations
+
+- No admin roles or moderation dashboard yet.
+- No password-reset or email-verification flow.
+- No server-side rate limiting yet.
+- The notification feed for posts by followed accounts includes device-local tracking; it is not yet a fully synchronized following feed.
+- Images are attached through public URLs on posts/groups. Profile pictures are resized in the browser and stored with profile data, rather than managed as a separate media service.
+- Do not treat this prototype as a production-secure social network. Use a unique password and never post private information.
+
+## Deployment
+
+The frontend currently publishes through GitHub Pages. The Cloudflare Worker backend must be deployed separately through Cloudflare. See ROADMAP.md for the low-cost implementation plan and official documentation links.
