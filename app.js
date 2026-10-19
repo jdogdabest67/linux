@@ -29,6 +29,7 @@ function setAccount(user) {
   $("saveProfile").disabled = !user;
   $("clearAvatar").disabled = !user;
   updateNotificationStatus();
+  if (user) loadNotifications();
 }
 async function restoreAccount() {
   if (!accountToken) { setAccount(null); return; }
@@ -45,7 +46,7 @@ async function accountAction(mode) {
     setAccount(data.user); $("accountPassword").value = "";
     $("accountStatus").textContent = "Welcome, @" + data.user.username + "!";
     if (window.jdbSelectSection) window.jdbSelectSection("account");
-    await loadMyProfile(); await loadPosts();
+    await loadMyProfile(); await loadPosts(); await loadNotifications();
   } catch (e) { $("accountStatus").textContent = e.message; }
 }
 function updateBannerPreview() {
@@ -255,7 +256,36 @@ function renderPosts() {
       head.append(remove);
     }
     const body = document.createElement("div"); body.className = "bubble-body"; body.textContent = parsed.text;
+    card.dataset.postId=String(post.id||"");
     card.append(head,body);
+
+    const tools = document.createElement("div"); tools.className="actions post-interactions";
+    const react = document.createElement("button"); react.type="button"; react.textContent="♡ Like"; react.disabled=!signedInUser;
+    const reactCount = document.createElement("span"); reactCount.className="small"; reactCount.textContent="Loading likes…";
+    react.addEventListener("click",async()=>{react.disabled=true;try{const data=await api("/api/reactions",{method:"POST",body:JSON.stringify({postId:post.id})});react.textContent=data.reacted?"♥ Liked":"♡ Like";reactCount.textContent=data.count+" likes";react.classList.toggle("primary",data.reacted);await loadNotifications();}catch(e){$("postStatus").textContent=e.message;}finally{react.disabled=!signedInUser;}});
+    if(post.id) api("/api/reactions?postId="+encodeURIComponent(post.id)).then(data=>{reactCount.textContent=data.count+" likes";react.textContent=data.reacted?"♥ Liked":"♡ Like";react.classList.toggle("primary",data.reacted);}).catch(()=>{reactCount.textContent="Likes unavailable";});
+    tools.append(react,reactCount);
+    const commentToggle=document.createElement("button");commentToggle.type="button";commentToggle.textContent="💬 Replies";tools.append(commentToggle);
+    const comments=document.createElement("div");comments.className="post-comments";comments.hidden=true;
+    const commentList=document.createElement("div");commentList.className="comment-list";commentList.textContent="Open replies to load them.";
+    const replyBox=document.createElement("textarea");replyBox.rows=2;replyBox.maxLength=500;replyBox.placeholder="Write a reply (500 characters max)…";replyBox.hidden=!signedInUser;
+    const replyActions=document.createElement("div");replyActions.className="actions";
+    const sendReply=document.createElement("button");sendReply.type="button";sendReply.textContent="Reply";sendReply.disabled=!signedInUser;
+    const commentStatus=document.createElement("p");commentStatus.className="small";commentStatus.setAttribute("aria-live","polite");
+    const loadComments=async()=>{commentList.replaceChildren();const loading=document.createElement("div");loading.className="empty";loading.textContent="Loading replies…";commentList.append(loading);try{const data=await api("/api/comments?postId="+encodeURIComponent(post.id));commentList.replaceChildren();if(!data.comments.length){const empty=document.createElement("p");empty.className="small";empty.textContent="No replies yet. Start the conversation!";commentList.append(empty);}for(const comment of data.comments){const item=document.createElement("div");item.className="comment-item";const author=document.createElement("strong");author.textContent="@"+comment.username;const text=document.createElement("p");text.textContent=comment.content;const time=document.createElement("time");time.className="small";time.textContent=relativeTime(new Date(comment.createdAt));time.title=new Date(comment.createdAt).toLocaleString();item.append(author,text,time);commentList.append(item);}}catch(e){commentList.textContent=e.message;}};
+    commentToggle.addEventListener("click",async()=>{comments.hidden=!comments.hidden;if(!comments.hidden){await loadComments();if(signedInUser)replyBox.focus();}});
+    sendReply.addEventListener("click",async()=>{if(!signedInUser){commentStatus.textContent="Sign in to reply.";return;}const content=replyBox.value.trim();if(!content){commentStatus.textContent="Write a reply first.";return;}sendReply.disabled=true;try{await api("/api/comments",{method:"POST",body:JSON.stringify({postId:post.id,content})});replyBox.value="";commentStatus.textContent="Reply posted.";await loadComments();await loadNotifications();}catch(e){commentStatus.textContent=e.message;}finally{sendReply.disabled=!signedInUser;}});
+    replyActions.append(sendReply);comments.append(commentList,replyBox,replyActions,commentStatus);tools.append(comments);
+    if(signedInUser && String(signedInUser.username).toLowerCase()!==String(post.username).toLowerCase()){
+      const more=document.createElement("details");more.className="post-safety";const summary=document.createElement("summary");summary.textContent="Report or block";more.append(summary);
+      const report=document.createElement("button");report.type="button";report.textContent="Report post";
+      report.addEventListener("click",async()=>{const reason=window.prompt("Why are you reporting this post? (Spam, harassment, unsafe content, etc.)");if(!reason||!reason.trim())return;try{const data=await api("/api/reports",{method:"POST",body:JSON.stringify({postId:post.id,reason:reason.trim()})});$("postStatus").textContent=data.message||"Report submitted.";report.disabled=true;}catch(e){$("postStatus").textContent=e.message;}});
+      const block=document.createElement("button");block.type="button";block.textContent="Block @"+post.username;
+      block.addEventListener("click",async()=>{if(!window.confirm("Block @"+post.username+"? Their posts and replies will be hidden from you, and yours from them."))return;try{await api("/api/blocks",{method:"POST",body:JSON.stringify({username:post.username,action:"block"})});$("postStatus").textContent="@"+post.username+" blocked.";await loadPosts();}catch(e){$("postStatus").textContent=e.message;}});
+      more.append(report,block);tools.append(more);
+    }
+    card.append(tools);
+
     getProfileCached(post.username).then(profile => { if (profile && profile.avatar && avatar.isConnected) avatar.src = profile.avatar; });
     if (parsed.extras && parsed.extras.imageUrl) {
       try {
@@ -293,6 +323,25 @@ function updateNotificationStatus() {
   if (!signedInUser) { status.textContent="Sign in and follow people to start seeing updates here."; return; }
   const users=readLocalList(FOLLOWED_USERS_KEY);
   status.textContent=users.length ? "Watching posts from: "+users.map(name=>"@"+name).join(", ")+". Updates are checked when the feed refreshes." : "Follow someone from Find people to start tracking their new posts on this device.";
+}
+
+let serverNotifications=[];
+async function loadNotifications(){
+  const area=$("notificationFeed");if(!area)return;
+  let direct=area.querySelector(".direct-notifications");
+  if(!direct){direct=document.createElement("div");direct.className="direct-notifications";area.prepend(direct);}
+  direct.replaceChildren();
+  const heading=document.createElement("h3");heading.textContent="Direct interactions";direct.append(heading);
+  if(!signedInUser){const p=document.createElement("p");p.className="empty";p.textContent="Sign in to receive replies and reaction notifications.";direct.append(p);return;}
+  try{
+    const data=await api("/api/notifications");serverNotifications=data.notifications||[];
+    const unread=serverNotifications.filter(item=>!item.read);
+    if(!serverNotifications.length){const p=document.createElement("p");p.className="small";p.textContent="No direct interactions yet. You'll only be notified when someone replies to or likes your post.";direct.append(p);return;}
+    const mark=document.createElement("button");mark.type="button";mark.textContent="Mark direct notifications read";mark.disabled=!unread.length;
+    mark.addEventListener("click",async()=>{mark.disabled=true;try{await api("/api/notifications/read",{method:"POST",body:JSON.stringify({})});serverNotifications=serverNotifications.map(item=>({...item,read:true}));await loadNotifications();}catch(e){$("notificationStatus").textContent=e.message;}});
+    direct.append(mark);
+    for(const item of serverNotifications){const card=document.createElement("article");card.className="bubble";const title=document.createElement("strong");title.textContent=(item.read?"":"● ")+"@"+item.actor+(item.type==="reply"?" replied to your post":" liked your post");const time=document.createElement("time");time.className="small";time.textContent=relativeTime(new Date(item.createdAt));const open=document.createElement("button");open.type="button";open.textContent="View post";open.addEventListener("click",()=>{if(window.jdbSelectSection)window.jdbSelectSection("posts");const target=document.querySelector('[data-post-id="'+item.postId+'"]');if(target)target.scrollIntoView({behavior:"smooth",block:"center"});});card.append(title,time,open);direct.append(card);}
+  }catch(e){const p=document.createElement("p");p.className="small";p.textContent="Direct notifications unavailable: "+e.message;direct.append(p);}
 }
 function renderNotifications() {
   const area=$("notificationFeed"); if (!area) return;
@@ -336,7 +385,7 @@ function markNotificationsSeen() {
 async function loadPosts() {
   const area = $("postFeed");
   area.replaceChildren(); const loading = document.createElement("div"); loading.className = "empty"; loading.textContent = "Fetching fresh posts…"; area.append(loading);
-  try { const data = await api("/api/posts"); cachedPosts = Array.isArray(data.posts) ? data.posts : []; renderPosts(); renderNotifications(); }
+  try { const data = await api("/api/posts"); cachedPosts = Array.isArray(data.posts) ? data.posts : []; renderPosts(); renderNotifications(); await loadNotifications(); }
   catch(e) { cachedPosts = []; area.replaceChildren(); const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "Couldn't load posts: " + e.message; area.append(empty); $("postCount").textContent = "Feed unavailable"; }
 }
 async function publishPost() {
