@@ -118,12 +118,12 @@ async function lookupProfile() {
 }
 const DRAFT_KEY = "jdogbrew-social-post-draft-v1";
 const POLL_VOTES_KEY = "jdogbrew-social-poll-votes-v1";
-const POST_EXTRA_PREFIX = "\\n\\n[[JDB_EXTRA:";
+const POST_EXTRA_PREFIX = "[[JDB_EXTRA:";
 const POST_EXTRA_SUFFIX = "]]";
 let cachedPosts = [];
 const profileCache = new Map();
 function getPostExtras(raw) {
-  const start = raw.lastIndexOf("\\n\\n[[JDB_EXTRA:");
+  const start = raw.lastIndexOf(POST_EXTRA_PREFIX);
   if (start < 0 || !raw.endsWith(POST_EXTRA_SUFFIX)) return {text:raw, extras:null};
   const encoded = raw.slice(start + POST_EXTRA_PREFIX.length, -POST_EXTRA_SUFFIX.length);
   try { return {text:raw.slice(0,start), extras:JSON.parse(decodeURIComponent(encoded))}; }
