@@ -1,3 +1,12 @@
+const DOG_BONE_BADGES = [
+  { id: "normal", tier: "Normal", name: "Dog Bone", threshold: 10000 },
+  { id: "metallic", tier: "Metallic", name: "Dog Bone", threshold: 100000 },
+  { id: "golden", tier: "Golden", name: "Dog Bone", threshold: 1000000 },
+  { id: "amethyst", tier: "Amethyst", name: "Dog Bone", threshold: 10000000 }
+];
+
+const POST_CATEGORIES = ["general", "games", "memes", "art", "projects", "tutorials"];
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
@@ -212,11 +221,19 @@ if(url.pathname.startsWith("/api/groups/")){
 if (url.pathname === "/api/posts" && request.method === "GET") {
       const posts = (await this.ctx.storage.get("social-posts")) || [];
       const viewer = await this.authUser(request);
+      const requestedFeed = new URL(request.url).searchParams.get("feed") || "explore";
+      if (!["explore", "following"].includes(requestedFeed)) return json({ ok: false, error: "Choose Explore or Following." }, 400);
+      if (requestedFeed === "following" && !viewer) return json({ ok: false, error: "Sign in to see posts from people you follow." }, 401);
       const blocks = (await this.ctx.storage.get("social-blocks")) || {};
       const blocked = viewer ? new Set(blocks[viewer.username.toLowerCase()] || []) : new Set();
       const blockedBy = viewer ? new Set(Object.keys(blocks).filter(key => (blocks[key] || []).includes(viewer.username.toLowerCase()))) : new Set();
-      const visible = posts.filter(post => !blocked.has(String(post.username).toLowerCase()) && !blockedBy.has(String(post.username).toLowerCase()));
-      return json({ ok: true, posts: visible.slice(-100).reverse() });
+      let visible = posts.filter(post => !blocked.has(String(post.username).toLowerCase()) && !blockedBy.has(String(post.username).toLowerCase()));
+      if (requestedFeed === "following") {
+        const follows = (await this.ctx.storage.get("social-follows")) || {};
+        const followed = new Set(follows[viewer.username.toLowerCase()] || []);
+        visible = visible.filter(post => followed.has(String(post.username).toLowerCase()));
+      }
+      return json({ ok: true, feed: requestedFeed, posts: visible.slice(-100).reverse() });
     }
     if (url.pathname.startsWith("/api/posts/") && request.method === "DELETE") {
       const user = await this.authUser(request);
@@ -239,9 +256,11 @@ if (url.pathname === "/api/posts" && request.method === "GET") {
       let body;
       try { body = await request.json(); } catch { return json({ ok: false, error: "Expected JSON." }, 400); }
       const content = typeof body.content === "string" ? body.content.trim() : "";
+      const category = typeof body.category === "string" ? body.category : "general";
       if (!content || content.length > 1000) return json({ ok: false, error: "Post must contain 1–1000 characters." }, 400);
+      if (!POST_CATEGORIES.includes(category)) return json({ ok: false, error: "Choose a valid post topic." }, 400);
       const posts = (await this.ctx.storage.get("social-posts")) || [];
-      const post = { id: crypto.randomUUID(), username: user.username, content, createdAt: Date.now() };
+      const post = { id: crypto.randomUUID(), username: user.username, content, category, createdAt: Date.now() };
       posts.push(post);
       await this.ctx.storage.put("social-posts", posts.slice(-1000));
       return json({ ok: true, post }, 201);
@@ -270,9 +289,12 @@ if (url.pathname === "/api/posts" && request.method === "GET") {
     const profiles = (await this.ctx.storage.get("social-profiles")) || {};
     const follows = (await this.ctx.storage.get("social-follows")) || {};
     const profile = profiles[key] || {};
-    const followers = Object.values(follows).filter(list => list.includes(key)).length;
+    const followers = Object.values(follows).filter(list => Array.isArray(list) && list.includes(key)).length;
     const following = (follows[key] || []).length;
     const isFollowing = !!viewerUsername && (follows[viewerUsername.toLowerCase()] || []).includes(key);
+    const earnedBadges = DOG_BONE_BADGES.filter(badge => followers >= badge.threshold);
+    const displayBadge = earnedBadges.find(badge => badge.id === profile.displayBadge) || null;
+    const nextBadge = DOG_BONE_BADGES.find(badge => followers < badge.threshold) || null;
     return json({ ok: true, profile: {
       username: user.username,
       displayName: profile.displayName || user.username,
@@ -284,6 +306,10 @@ if (url.pathname === "/api/posts" && request.method === "GET") {
       bannerUrl: profile.bannerUrl || "",
       followers,
       following,
+      earnedBadges,
+      displayBadge,
+      displayBadgeId: displayBadge ? displayBadge.id : "",
+      nextBadge,
       isFollowing,
       isSelf: !!viewerUsername && viewerUsername.toLowerCase() === key
     }});
@@ -311,6 +337,12 @@ if (url.pathname === "/api/posts" && request.method === "GET") {
       return json({ ok: false, error: "Choose a PNG, JPEG, or WebP image under the profile-picture size limit." }, 400);
     }
     const key = user.username.toLowerCase();
+    const follows = (await this.ctx.storage.get("social-follows")) || {};
+    const followers = Object.values(follows).filter(list => Array.isArray(list) && list.includes(key)).length;
+    const requestedBadge = typeof body.displayBadge === "string" ? body.displayBadge : "";
+    if (body.displayBadge !== undefined && requestedBadge !== "" && !DOG_BONE_BADGES.some(badge => badge.id === requestedBadge && followers >= badge.threshold)) {
+      return json({ ok: false, error: "That Dog Bone badge has not been earned yet. Badge eligibility is based on your real follower count." }, 403);
+    }
     const profiles = (await this.ctx.storage.get("social-profiles")) || {};
     const prior = profiles[key] || {};
     profiles[key] = {
@@ -320,7 +352,8 @@ if (url.pathname === "/api/posts" && request.method === "GET") {
       pronouns: body.pronouns === undefined ? (prior.pronouns || "") : pronouns,
       favoriteGame: body.favoriteGame === undefined ? (prior.favoriteGame || "") : favoriteGame,
       accent: body.accent === undefined ? (prior.accent || "#a78bfa") : accent,
-      bannerUrl: body.bannerUrl === undefined ? (prior.bannerUrl || "") : bannerUrl
+      bannerUrl: body.bannerUrl === undefined ? (prior.bannerUrl || "") : bannerUrl,
+      displayBadge: body.displayBadge === undefined ? (prior.displayBadge || "") : requestedBadge
     };
     await this.ctx.storage.put("social-profiles", profiles);
     return this.profileResponse(user.username, user.username);
