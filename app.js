@@ -117,7 +117,6 @@ async function lookupProfile() {
   catch(e) { $("profileResult").textContent = e.message; }
 }
 const DRAFT_KEY = "jdogbrew-social-post-draft-v1";
-const POLL_VOTES_KEY = "jdogbrew-social-poll-votes-v1";
 const POST_EXTRA_PREFIX = "[[JDB_EXTRA:";
 const POST_EXTRA_SUFFIX = "]]";
 let cachedPosts = [];
@@ -136,30 +135,16 @@ function getProfileCached(username) {
   }
   return profileCache.get(username);
 }
-function readPollVotes() {
-  try { return JSON.parse(localStorage.getItem(POLL_VOTES_KEY) || "{}"); } catch (_) { return {}; }
-}
-function writePollVote(key, optionIndex) {
-  const votes = readPollVotes(); votes[key] = optionIndex;
-  try { localStorage.setItem(POLL_VOTES_KEY, JSON.stringify(votes)); } catch (_) {}
-}
 function postKey(post) { return String(post.id || (post.username + "|" + post.createdAt + "|" + post.content)); }
 function encodePostContent() {
   const text = $("postComposer").value.trim();
   const imageUrl = $("postImageUrl").value.trim();
-  const question = $("pollQuestion").value.trim();
-  const option1 = $("pollOption1").value.trim();
-  const option2 = $("pollOption2").value.trim();
   let extras = null;
   if (imageUrl) {
     let parsed;
     try { parsed = new URL(imageUrl); } catch (_) { throw Error("Enter a valid image URL."); }
     if (!["http:","https:"].includes(parsed.protocol)) throw Error("Image URLs must start with http:// or https://.");
     extras = {imageUrl:parsed.href};
-  }
-  if (question || option1 || option2) {
-    if (!question || !option1 || !option2) throw Error("A poll needs a question and two options.");
-    extras = {...(extras || {}), poll:{question,options:[option1,option2]}};
   }
   if (!text && !extras) throw Error("Write something, attach an image, or create a poll first.");
   const content = text + (extras ? POST_EXTRA_PREFIX + encodeURIComponent(JSON.stringify(extras)) + POST_EXTRA_SUFFIX : "");
@@ -223,24 +208,6 @@ function renderPosts() {
         }
       } catch (_) {}
     }
-    if (parsed.extras && parsed.extras.poll && Array.isArray(parsed.extras.poll.options) && parsed.extras.poll.options.length >= 2) {
-      const poll = parsed.extras.poll, pollKey = postKey(post), votes = readPollVotes(), selected = votes[pollKey];
-      const pollBox = document.createElement("div"); pollBox.className = "poll-card";
-      const question = document.createElement("strong"); question.textContent = poll.question || "Poll";
-      pollBox.append(question);
-      const counts = Array.isArray(poll.options) ? poll.options.map((_,i)=>selected===i?1:0) : [];
-      const total = counts.reduce((sum,n)=>sum+n,0);
-      poll.options.slice(0,4).forEach((option,index)=>{
-        const choice = document.createElement("button"); choice.type="button"; choice.className="poll-choice"+(selected===index?" selected":""); choice.disabled=selected!==undefined;
-        const label=document.createElement("span"); label.textContent=option;
-        const percent=document.createElement("span"); percent.className="poll-percent"; percent.textContent=selected===index?"Your vote":"";
-        choice.append(label,percent);
-        choice.addEventListener("click",()=>{writePollVote(pollKey,index);renderPosts();});
-        pollBox.append(choice);
-      });
-      const meta=document.createElement("div"); meta.className="poll-meta"; meta.textContent=selected===undefined?"Choose one option to vote. Votes are stored on this device only.":"Vote saved on this device.";
-      pollBox.append(meta); card.append(pollBox);
-    }
     area.append(card);
   }
 }
@@ -254,7 +221,7 @@ async function publishPost() {
   if (!signedInUser) { $("postStatus").textContent="Sign in first to publish."; return; }
   let content;
   try { content=encodePostContent(); } catch(e) { $("postStatus").textContent=e.message; return; }
-  try { $("publishPost").disabled=true; $("postStatus").textContent="Publishing…"; await api("/api/posts",{method:"POST",body:JSON.stringify({content})}); $("postComposer").value=""; $("postImageUrl").value=""; $("pollQuestion").value=""; $("pollOption1").value=""; $("pollOption2").value=""; localStorage.removeItem(DRAFT_KEY); updateComposerMeta(); $("draftStatus").textContent="Draft cleared after publishing."; $("postStatus").textContent="Posted! Saved on the server."; await loadPosts(); }
+  try { $("publishPost").disabled=true; $("postStatus").textContent="Publishing…"; await api("/api/posts",{method:"POST",body:JSON.stringify({content})}); $("postComposer").value=""; $("postImageUrl").value=""; localStorage.removeItem(DRAFT_KEY); updateComposerMeta(); $("draftStatus").textContent="Draft cleared after publishing."; $("postStatus").textContent="Posted! Saved on the server."; await loadPosts(); }
   catch(e){$("postStatus").textContent=e.message;}
   finally{$("publishPost").disabled=!signedInUser;}
 }
