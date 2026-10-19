@@ -73,8 +73,8 @@ async function accountAction(mode) {
 }
 function updateBannerPreview() {
   const url = $("profileBannerUrl").value.trim(), preview = $("myBannerPreview");
-  let valid = false;
-  try { const parsed = new URL(url); valid = ["http:", "https:"].includes(parsed.protocol); } catch (_) {}
+  let valid = /^data:image\\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(url);
+  try { const parsed = new URL(url); valid = valid || ["http:", "https:"].includes(parsed.protocol); } catch (_) {}
   preview.hidden = !valid;
   preview.style.backgroundImage = valid ? "url(" + JSON.stringify(url) + ")" : "";
 }
@@ -139,7 +139,7 @@ async function saveProfile() {
 }
 function renderProfile(p) {
   const root = $("profileResult"); root.replaceChildren();
-  const banner = document.createElement("div"); banner.className = "profile-public-banner"; banner.hidden = !p.bannerUrl; if (p.bannerUrl) banner.style.backgroundImage = "url(" + JSON.stringify(p.bannerUrl) + ")"; root.append(banner);
+  const banner = document.createElement("div"); banner.className = "profile-public-banner profile-result-banner"; banner.hidden = !p.bannerUrl; if (p.bannerUrl) banner.style.backgroundImage = "url(" + JSON.stringify(p.bannerUrl) + ")"; root.append(banner);
   const card = document.createElement("div"); card.className = "profile-top";
   const img = document.createElement("img"); img.className = "avatar"; img.alt = "Profile picture"; img.src = p.avatar || fallbackAvatar; img.style.borderColor = p.accent || "#a78bfa";
   const details = document.createElement("div");
@@ -551,6 +551,58 @@ $("postFeedMode").addEventListener("change", loadPosts);
 $("postCategoryFilter").addEventListener("change", renderPosts);
 $("postImageUrl").addEventListener("input", updateImagePreview);
 $("profileBannerUrl").addEventListener("input", updateBannerPreview);
+const bannerCanvas = $("bannerCanvas"), bannerCtx = bannerCanvas.getContext("2d");
+let bannerDrawing = false, bannerErasing = false, bannerUndoStack = [];
+function paintBannerBase() {
+  const gradient = bannerCtx.createLinearGradient(0, 0, bannerCanvas.width, bannerCanvas.height);
+  gradient.addColorStop(0, "#35245f"); gradient.addColorStop(.52, "#173a57"); gradient.addColorStop(1, "#0b293b");
+  bannerCtx.fillStyle = gradient; bannerCtx.fillRect(0, 0, bannerCanvas.width, bannerCanvas.height);
+  for (let i = 0; i < 70; i++) {
+    const x = (i * 137 + 31) % bannerCanvas.width, y = (i * 71 + 19) % bannerCanvas.height;
+    bannerCtx.fillStyle = i % 4 === 0 ? "rgba(143,232,211,.75)" : "rgba(255,255,255,.55)";
+    bannerCtx.beginPath(); bannerCtx.arc(x, y, i % 7 === 0 ? 2.2 : 1, 0, Math.PI * 2); bannerCtx.fill();
+  }
+}
+function rememberBanner() {
+  if (bannerUndoStack.length >= 30) bannerUndoStack.shift();
+  bannerUndoStack.push(bannerCanvas.toDataURL("image/png"));
+}
+function bannerPoint(event) {
+  const rect = bannerCanvas.getBoundingClientRect();
+  return {x:(event.clientX-rect.left)*bannerCanvas.width/rect.width,y:(event.clientY-rect.top)*bannerCanvas.height/rect.height};
+}
+function startBannerDraw(event) {
+  if (event.button !== undefined && event.button !== 0) return;
+  event.preventDefault(); rememberBanner(); bannerDrawing = true; bannerCanvas.setPointerCapture(event.pointerId);
+  const p = bannerPoint(event); bannerCtx.beginPath(); bannerCtx.moveTo(p.x,p.y); bannerCtx.lineTo(p.x+.01,p.y+.01);
+  bannerCtx.lineWidth = Number($("bannerBrushSize").value); bannerCtx.lineCap = "round"; bannerCtx.lineJoin = "round";
+  bannerCtx.strokeStyle = bannerErasing ? "#18203a" : $("bannerColor").value; bannerCtx.stroke();
+}
+function moveBannerDraw(event) {
+  if (!bannerDrawing) return; event.preventDefault(); const p = bannerPoint(event);
+  bannerCtx.lineTo(p.x,p.y); bannerCtx.lineWidth = Number($("bannerBrushSize").value); bannerCtx.lineCap = "round"; bannerCtx.lineJoin = "round";
+  bannerCtx.strokeStyle = bannerErasing ? "#18203a" : $("bannerColor").value; bannerCtx.stroke();
+}
+function stopBannerDraw() { if (bannerDrawing) { bannerDrawing = false; bannerCtx.closePath(); } }
+function restoreBannerSnapshot(src) {
+  const img = new Image(); img.onload = () => { bannerCtx.clearRect(0,0,bannerCanvas.width,bannerCanvas.height); bannerCtx.drawImage(img,0,0); }; img.src = src;
+}
+paintBannerBase();
+bannerCanvas.addEventListener("pointerdown", startBannerDraw);
+bannerCanvas.addEventListener("pointermove", moveBannerDraw);
+bannerCanvas.addEventListener("pointerup", stopBannerDraw);
+bannerCanvas.addEventListener("pointercancel", stopBannerDraw);
+bannerCanvas.addEventListener("lostpointercapture", stopBannerDraw);
+$("bannerUndo").addEventListener("click", () => { const prior = bannerUndoStack.pop(); if (prior) restoreBannerSnapshot(prior); $("bannerStudioStatus").textContent = prior ? "Last stroke undone." : "Nothing left to undo."; });
+$("bannerEraser").addEventListener("click", () => { bannerErasing = !bannerErasing; $("bannerEraser").textContent = bannerErasing ? "⌫ Eraser: on" : "⌫ Eraser: off"; $("bannerStudioStatus").textContent = bannerErasing ? "Eraser is on. It paints the banner background color." : "Drawing mode restored."; });
+$("bannerClear").addEventListener("click", () => { rememberBanner(); paintBannerBase(); $("bannerStudioStatus").textContent = "Fresh canvas! Go forth and doodle."; });
+$("bannerUse").addEventListener("click", () => {
+  const data = bannerCanvas.toDataURL("image/jpeg", .72);
+  if (data.length > 180000) { $("bannerStudioStatus").textContent = "This drawing is too large to save. Try simpler strokes or fewer details."; return; }
+  $("profileBannerUrl").value = data; updateBannerPreview();
+  $("bannerStudioStatus").textContent = "Banner added to your profile draft. Tap Save profile below to publish it.";
+  $("profileStatus").textContent = "Custom banner ready. Save profile to publish it.";
+});
 $("imagePreviewImg").addEventListener("load", () => { $("imagePreviewStatus").textContent = "Preview ready. It will be attached when you publish."; });
 $("imagePreviewImg").addEventListener("error", () => { $("imagePreviewStatus").textContent = "Couldn’t load this preview. The URL may still work for other people."; });
 $("postSort").addEventListener("change", renderPosts);
