@@ -551,7 +551,8 @@ $("postFeedMode").addEventListener("change", loadPosts);
 $("postCategoryFilter").addEventListener("change", renderPosts);
 $("postImageUrl").addEventListener("input", updateImagePreview);
 $("profileBannerUrl").addEventListener("input", updateBannerPreview);
-const bannerCanvas = $("bannerCanvas"), bannerCtx = bannerCanvas.getContext("2d");
+const bannerCanvas = $("bannerCanvas"), bannerCtx = bannerCanvas ? bannerCanvas.getContext("2d") : null;
+if (bannerCanvas && bannerCtx) {
 let bannerDrawing = false, bannerErasing = false, bannerUndoStack = [];
 function paintBannerBase() {
   const gradient = bannerCtx.createLinearGradient(0, 0, bannerCanvas.width, bannerCanvas.height);
@@ -603,6 +604,7 @@ $("bannerUse").addEventListener("click", () => {
   $("bannerStudioStatus").textContent = "Banner added to your profile draft. Tap Save profile below to publish it.";
   $("profileStatus").textContent = "Custom banner ready. Save profile to publish it.";
 });
+} else { console.warn("Banner Creator is unavailable on this cached page; account features remain enabled."); }
 $("imagePreviewImg").addEventListener("load", () => { $("imagePreviewStatus").textContent = "Preview ready. It will be attached when you publish."; });
 $("imagePreviewImg").addEventListener("error", () => { $("imagePreviewStatus").textContent = "Couldn’t load this preview. The URL may still work for other people."; });
 $("postSort").addEventListener("change", renderPosts);
