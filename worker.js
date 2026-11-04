@@ -44,7 +44,7 @@ export default {
       return json({
         ok: true,
         service: "joygpt-signal-bridge",
-        version: "social-v1",
+        version: "joygpt-relay-only",
         websocketSupported: true
       });
     }
@@ -66,10 +66,8 @@ export default {
       return stub.fetch(request);
     }
 
-    if (["/api/register", "/api/login", "/api/me", "/api/posts", "/api/profile", "/api/follow"].includes(url.pathname) ||
-        url.pathname.startsWith("/api/profile/") || url.pathname.startsWith("/api/posts/") || url.pathname.startsWith("/api/comments") || url.pathname.startsWith("/api/reactions") || url.pathname.startsWith("/api/reports") || url.pathname.startsWith("/api/blocks") || url.pathname.startsWith("/api/notifications") || url.pathname.startsWith("/api/groups")) {
-      const stub = env.SIGNAL_STORE.get(env.SIGNAL_STORE.idFromName("jdogbrew-social-data-v1"));
-      return ensureCors(await stub.fetch(new Request("https://social-store.internal" + url.pathname + url.search, request)));
+    if (url.pathname.startsWith("/api/") && !["/api/health","/api/socket","/api/message","/api/messages"].includes(url.pathname)) {
+      return json({ ok: false, error: "JDog Social has been retired. This API is no longer available." }, 410);
     }
 
     if (url.pathname === "/api/message" && request.method === "POST") {
