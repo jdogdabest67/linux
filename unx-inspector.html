@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#160d25">
+<meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'">
+<title>UNX Inspector | Game Goofer</title>
+<style>
+:root{--bg:#160d25;--panel:#221538;--line:#3a2860;--text:#efe8ff;--dim:#a99bc9;--accent:#a35cff;--warn:#ffcf5c;--err:#ff7a9a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,sans-serif;padding:1rem;max-width:1000px;margin-inline:auto}
+h1{margin:.2rem 0;font-size:1.8rem} p{color:var(--dim);margin:.3rem 0 1rem}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:1.5rem;text-align:center;background:var(--panel)}
+.drop.over{border-color:var(--accent)}
+button,input,select{font:inherit;color:var(--text);background:#2d1c4d;border:1px solid var(--line);border-radius:8px;padding:.5rem .8rem}
+button{cursor:pointer;background:var(--accent);border-color:var(--accent);color:#fff} button:disabled{opacity:.4;cursor:default}
+:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.msg{padding:.6rem .8rem;border-radius:8px;margin:.5rem 0;background:var(--panel);border-left:4px solid var(--line)}
+.msg.warn{border-color:var(--warn)} .msg.err{border-color:var(--err)}
+.tabs{display:flex;flex-wrap:wrap;gap:.4rem;margin:1rem 0 .6rem}
+.tabs button{background:var(--panel);border-color:var(--line)} .tabs button[aria-selected=true]{background:var(--accent);border-color:var(--accent)}
+.bar{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem} .bar input[type=search]{flex:1;min-width:12rem}
+.wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:.9rem} th,td{padding:.35rem .6rem;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+td.n{white-space:normal;word-break:break-all} th{background:var(--panel);position:sticky;top:0}
+.dim{color:var(--dim)} #detail{margin-top:1rem} #detail h2{font-size:1.1rem;margin:.2rem 0} #detail pre{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:.6rem;font-size:.8rem;max-height:24rem}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));gap:.8rem} .cols ul{margin:.2rem 0;padding-left:1.1rem;font-size:.85rem;word-break:break-all} button.sm{padding:.15rem .5rem} footer{margin-top:2rem;color:var(--dim);font-size:.85rem}
+</style>
+</head>
+<body>
+<h1>UNX Inspector</h1>
+<p>Read-only look inside a GameMaker data file (<code>game.unx</code>, <code>data.win</code>). Files are read in your browser only and never uploaded or modified.</p>
+
+<div class="drop" id="drop">
+  <label for="file">Choose a data file, or drop it here</label><br><br>
+  <input type="file" id="file" accept=".unx,.win,.ios,.droid,application/octet-stream">
+</div>
+<div id="status" class="msg" hidden role="status"></div>
+<div id="issues"></div>
+<div id="results" hidden>
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <div class="bar">
+    <input type="search" id="q" placeholder="Search this tab (try: battle, encounter, enemy)" aria-label="Search this tab">
+    <button id="export" type="button">Export report JSON</button>
+    <label class="dim"><input type="checkbox" id="incStr"> include strings in export</label>
+  </div>
+  <div id="view"></div>
+  <div id="detail"></div>
+</div>
+<footer>Supported: chunk table, GEN8 summary, name lists for objects, scripts, rooms, code, sprites, sounds and a few others, plus the string table. Chunks marked recognized-unparsed or unknown are listed but not read. Code tab: references (calls, variables, strings) are resolved from compiled bytecode and verified per file; this is not a GML decompiler. Not supported: object event tables, GML decompiling, textures, audio, exact version detection, editing or patching. Layouts follow public format docs and are checked against real data only when you load a real file; watch the warnings above.</footer>
+<script src="gm-code-scan.js"></script>
+<script src="gm-data-reader.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const PAGE = 200;
+  let result = null, tab = 'overview', shown = PAGE;
+  const TABS = [['overview', 'Overview'], ['validation', 'Validation'], ['chunks', 'Chunks'], ['objects', 'Objects'], ['scripts', 'Scripts'], ['code', 'Code'], ['rooms', 'Rooms'], ['sprites', 'Sprites'], ['sounds', 'Sounds'], ['strings', 'Strings']];
+  const COLS = {
+    objects: ['index', 'name', 'offset', 'spriteName', 'parentName', 'depth', 'solid', 'persistent', 'codeEntriesByName'],
+    scripts: ['index', 'name', 'offset', 'codeName'], code: ['index', 'name', 'offset', 'bytecodeAt', 'length', 'object', 'event'],
+    rooms: ['index', 'name', 'offset', 'caption', 'width', 'height'], sprites: ['index', 'name', 'offset', 'width', 'height'], sounds: ['index', 'name', 'offset'],
+  };
+  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const status = (t) => { $('status').hidden = !t; $('status').textContent = t || ''; };
+
+  async function load(file) {
+    result = null; $('results').hidden = true; $('issues').innerHTML = '';
+    status('Reading ' + file.name + ' ...');
+    try { result = await GMDataReader.inspect(file, { onProgress: status }); }
+    catch (e) { status(''); $('issues').innerHTML = '<div class="msg err">Unexpected error: ' + esc(e.message) + '</div>'; return; }
+    status('');
+    const r = result.report;
+    $('issues').innerHTML = r.errors.map((m) => '<div class="msg err">' + esc(m) + '</div>').join('') + r.warnings.map((m) => '<div class="msg warn">' + esc(m) + '</div>').join('');
+    if (!r.chunks.length) return;
+    tab = 'overview'; shown = PAGE; $('q').value = ''; $('results').hidden = false; renderTabs(); render();
+  }
+
+  function renderTabs() {
+    $('tabs').innerHTML = TABS.map(([k, l]) => {
+      const s = result.report.sections[k];
+      const n = k === 'chunks' ? result.report.chunks.length : k === 'validation' ? result.report.validation.checks.length : s ? s.count : null;
+      return '<button type="button" role="tab" data-t="' + k + '" aria-selected="' + (k === tab) + '">' + l + (n != null ? ' (' + n + ')' : '') + '</button>';
+    }).join('');
+  }
+  function table(cols, rows, withRefs) {
+    return '<div class="wrap"><table><thead><tr>' + cols.map((c) => '<th>' + esc(c) + '</th>').join('') + (withRefs ? '<th>details</th>' : '') + '</tr></thead><tbody>' +
+      rows.map((r) => '<tr>' + cols.map((c) => '<td' + (c === 'name' ? ' class="n"' : '') + '>' + esc(r[c]) + '</td>').join('') + (withRefs ? '<td><button type="button" data-open="' + r.index + '">refs</button></td>' : '') + '</tr>').join('') + '</tbody></table></div>';
+  }
+  // Code detail: references resolved by gm-code-scan.js (self-verified per file; see Validation tab). Not a decompiler.
+  function showRefs(i) {
+    const sec = result.report.sections[tab]; let item = sec.items.find((x) => x.index === +i); let e = item;
+    if (tab === 'scripts') e = result.report.sections.code.items.find((c) => c.name === item.codeName);
+    const d = $('detail'); if (!e || e.address === undefined) { d.innerHTML = '<div class="msg warn">No bytecode entry is linked to this row.</div>'; return; }
+    const r = result.data.codeScan.refs(e), l = result.data.codeScan.lines(e);
+    const list = (a, f, n) => a.slice(0, n).map(f).join('') || '<li class="dim">none</li>';
+    d.innerHTML = '<h2>' + esc(e.name) + '</h2><p class="dim">bytecode ' + esc(e.bytecodeAt) + ', ' + r.length + ' bytes, ' + r.instructions + ' instructions' + (r.error ? ', ERROR: ' + esc(r.error) : '') + '</p>' +
+      '<div class="cols"><div><b>Calls</b><ul>' + list(r.calls, (c) => '<li>' + esc(c.name) + ' x' + c.count + '</li>', 40) + '</ul></div>' +
+      '<div><b>Variables</b><ul>' + list(r.variables, (v) => '<li>' + esc(v.name) + ' x' + v.count + '</li>', 40) + '</ul></div>' +
+      '<div><b>Strings</b><ul>' + list(r.strings, (s) => '<li>' + esc(s.text.length > 80 ? s.text.slice(0, 80) + '...' : s.text) + '</li>', 40) + '</ul></div></div>' +
+      '<b>Resolved listing</b> <span class="dim">(first 150 of ' + l.lines.length + ' instructions; not decompiled GML)</span><pre>' + esc(l.lines.slice(0, 150).map((x) => String(x.at).padStart(5) + '  ' + x.text).join('\n')) + '</pre>';
+    d.scrollIntoView({ block: 'nearest' });
+  }
+  function render() {
+    const r = result.report, q = $('q').value.trim().toLowerCase(), v = $('view');
+    $('q').disabled = tab === 'overview' || tab === 'validation';
+    if (tab === 'overview') {
+      const g = r.gen8 || {};
+      v.innerHTML = table(['field', 'value'], [
+        ['file', r.file.name], ['size (bytes)', r.file.size], ['signature', r.container.signature], ['chunks', r.chunks.length],
+        ['validation', r.validation.status], ['game name', g.name], ['display name', g.displayName], ['WAD / bytecode version', g.wadVersion], ['GEN8 version fields', g.gameMakerVersionFields],
+        ['minimum version implied by chunks', r.version && r.version.minimumImpliedByChunks], ['exact GameMaker version', r.version && r.version.exactVersion],
+        ['object field layout', r.objectLayout ? (r.objectLayout.managed ? '2022.5+ (managed field)' : 'pre-2022.5') + ', confidence ' + r.objectLayout.confidence : 'unknown'], ['default window', g.defaultWindow], ['bytecode self-check', (r.validation.checks.find((c) => c.id === 'bytecode') || {}).detail || 'not run'],
+      ].map(([field, value]) => ({ field, value }))) + (r.version ? '<p class="dim">' + esc(r.version.note) + '</p>' : '');
+      return;
+    }
+    if (tab === 'validation') {
+      v.innerHTML = table(['status', 'id', 'detail'], r.validation.checks) + '<p class="dim">pass = looked right, warn = check the warnings above, fail = this file was not read correctly, info = not a pass/fail check.</p>';
+      return;
+    }
+    let rows, cols;
+    if (tab === 'chunks') { cols = ['name', 'status', 'offset', 'size']; rows = r.chunks; }
+    else if (tab === 'strings') { cols = ['index', 'text']; rows = result.data.strings.map((t, i) => ({ index: i, text: t.length > 160 ? t.slice(0, 160) + '...' : t })); }
+    else { cols = COLS[tab]; rows = (r.sections[tab] || { items: [] }).items; }
+    const f = q ? rows.filter((x) => cols.some((c) => String(x[c] == null ? '' : x[c]).toLowerCase().includes(q))) : rows;
+    const sec = r.sections[tab];
+    v.innerHTML = (sec && sec.note ? '<p class="dim">' + esc(sec.note) + '</p>' : '') +
+      '<p class="dim">' + f.length + ' of ' + rows.length + ' shown' + (sec && sec.nullEntries ? ' (' + sec.nullEntries + ' empty slots)' : '') + '</p>' +
+      (f.length ? table(cols, f.slice(0, shown), (tab === 'code' || tab === 'scripts') && !!result.data.codeScan) : '<div class="msg">Nothing here. Either this section is missing from the file or nothing matches your search.</div>') +
+      (f.length > shown ? '<p><button type="button" id="more">Show ' + Math.min(PAGE, f.length - shown) + ' more</button></p>' : '');
+  }
+
+  $('tabs').addEventListener('click', (e) => { const t = e.target.dataset.t; if (t) { tab = t; shown = PAGE; $('detail').innerHTML = ''; renderTabs(); render(); } });
+  $('q').addEventListener('input', () => { shown = PAGE; render(); });
+  $('view').addEventListener('click', (e) => { if (e.target.id === 'more') { shown += PAGE; render(); } else if (e.target.dataset.open !== undefined) showRefs(e.target.dataset.open); });
+  $('file').addEventListener('change', (e) => e.target.files[0] && load(e.target.files[0]));
+  const drop = $('drop');
+  ['dragover', 'dragenter'].forEach((n) => drop.addEventListener(n, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((n) => drop.addEventListener(n, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', (e) => e.dataTransfer.files[0] && load(e.dataTransfer.files[0]));
+  $('export').addEventListener('click', () => {
+    if (!result) return;
+    const out = JSON.parse(JSON.stringify(result.report));
+    if ($('incStr').checked) out.strings = result.data.strings;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' }));
+    a.download = 'unx-inspection-report.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+})();
+</script>
+</body>
+</html>
