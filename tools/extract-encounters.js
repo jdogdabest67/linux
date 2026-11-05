@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Research CLI: node tools/extract-encounters.js <data-file> [--json]
-// Decodes the switch(argument0) in the compiled \`scr_encountersetup\` script into per-case monster slot assignments.
+// Decodes the switch(argument0) in the compiled scr_encountersetup script into per-case monster slot assignments.
 // Read-only. Output stays on your machine; it is derived from YOUR copy of the game, so do not commit/redistribute it.
 // Pattern assumptions (verified by eye on one Deltarune Ch1 file, NOT proven general): case dispatch = [dup, pushi N, cmp ==, bt target],
 // assignments = [pushi VALUE, conv.i.v, pushi -5, pushi SLOT, pop.v.v monstertype|monsterinstancetype].
@@ -14,11 +14,11 @@ const fs = require('fs'); const path = require('path'); const R = require('../gm
   if (!e) { console.error('scr_encountersetup not found'); process.exit(1); }
   const objName = new Map(report.sections.objects.items.map((o) => [o.index, o.name]));
   const L = data.codeScan.lines(e).lines; const at = new Map(L.map((l, i) => [l.at, i]));
-  const num = (t, p) => { const m = new RegExp('^' + p + ' (-?\\\\d+)$').exec(t); return m ? +m[1] : null; };
+  const num = (t, p) => { const m = new RegExp('^' + p + ' (-?\\d+)$').exec(t); return m ? +m[1] : null; };
   // 1) dispatch table
-  const start = L.findIndex((l) => /^push\\.v\\.d arg\\.argument0$/.test(l.text)); if (start < 0) { console.error('argument0 switch not found'); process.exit(1); }
+  const start = L.findIndex((l) => /^push\.v\.d arg\.argument0$/.test(l.text)); if (start < 0) { console.error('argument0 switch not found'); process.exit(1); }
   const cases = []; let i = start + 1;
-  while (i + 3 < L.length && L[i].text === 'dup.v.d' && num(L[i + 1].text, 'pushi') !== null && /^cmp\\.iv kind=3$/.test(L[i + 2].text) && /^bt -?\\\\d+$/.test(L[i + 3].text)) {
+  while (i + 3 < L.length && L[i].text === 'dup.v.d' && num(L[i + 1].text, 'pushi') !== null && /^cmp\.iv kind=3$/.test(L[i + 2].text) && /^bt -?\d+$/.test(L[i + 3].text)) {
     cases.push({ n: num(L[i + 1].text, 'pushi'), target: L[i + 3].at + 4 * +L[i + 3].text.split(' ')[1] }); i += 4;
   }
   const badTargets = cases.filter((c) => !at.has(c.target)).length;
@@ -29,9 +29,9 @@ const fs = require('fs'); const path = require('path'); const R = require('../gm
     for (; k !== undefined && k < L.length; k++) {
       const t = L[k].text;
       if (k > at.get(c.target) && targetSet.has(L[k].at)) break;      // next case body begins
-      if (/^b -?\\\\d+$/.test(t)) break;                                  // unconditional jump = end of this case body
+      if (/^b -?\d+$/.test(t)) break;                                  // unconditional jump = end of this case body
       if (/^(bf|bt) /.test(t) || /^call instance_exists/.test(t)) conditional = true;
-      const m = /^pop\\.v\\.v stack\\?\\.(monstertype|monsterinstancetype)$/.exec(t);
+      const m = /^pop\.v\.v stack\?\.(monstertype|monsterinstancetype)$/.exec(t);
       if (m && k >= 4 && num(L[k - 4].text, 'pushi') !== null && L[k - 3].text === 'conv.i.v' && L[k - 2].text === 'pushi -5' && num(L[k - 1].text, 'pushi') !== null) {
         const slot = num(L[k - 1].text, 'pushi'), v = num(L[k - 4].text, 'pushi'); (slots[slot] = slots[slot] || {})[m[1]] = v;
       }
