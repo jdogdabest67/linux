@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#160d25">
+<title>ProtoGoofer | Deltarune Chapter 1</title>
+<style>
+:root{color-scheme:dark;--bg:#10091b;--panel:#1d1230;--panel2:#281941;--purple:#a879ff;--pink:#ff70bd;--text:#f7f1ff;--muted:#b8a9ca;--line:#493365}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#382052 0,#160d25 45%,#0c0713 100%);color:var(--text);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}
+main{max-width:980px;margin:auto;padding:28px 18px 60px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.brand{font-weight:900;letter-spacing:.12em;color:var(--purple);font-size:13px}.chapter{border:1px solid var(--line);border-radius:99px;padding:6px 12px;color:var(--muted);font-size:12px}
+h1{font-size:clamp(36px,8vw,64px);line-height:1;margin:30px 0 10px;letter-spacing:-.05em}h1 span{color:var(--pink)}.sub{color:var(--muted);max-width:650px}
+.notice{margin:22px 0;padding:13px 15px;background:#33213f;border:1px solid #8053a4;border-radius:12px;color:#eadcff;font-size:14px}
+.layout{display:grid;grid-template-columns: minmax(240px,310px) 1fr;gap:16px;margin-top:20px}.panel{background:linear-gradient(160deg,#241735,#171021);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 12px 35px #0004}
+h2{font-size:17px;margin:0 0 14px}.field{margin:13px 0}.field label{display:block;font-weight:650;margin-bottom:6px}.hint{color:var(--muted);font-size:12px}.row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+input[type=number],input[type=text]{width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:#100b18;color:var(--text);font:inherit}
+input[type=checkbox]{accent-color:var(--purple);width:17px;height:17px}.check{display:flex;align-items:center;gap:9px;margin:10px 0;color:#e8dff3}
+button,.linkbtn{border:0;border-radius:10px;padding:11px 14px;background:var(--purple);color:#160d25;font-weight:800;font:inherit;font-size:14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+button:hover,.linkbtn:hover{filter:brightness(1.12)}button.secondary,.linkbtn.secondary{background:#342448;color:var(--text);border:1px solid var(--line)}button:active{transform:translateY(1px)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}.actions button{flex:1}.results-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.seedtag{font:12px ui-monospace,monospace;color:var(--muted);overflow-wrap:anywhere}
+.encounters{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:14px}.encounter{background:linear-gradient(145deg,#302044,#21162e);border:1px solid #5b4075;border-radius:12px;padding:13px;min-height:112px}.encounter .num{font:12px ui-monospace,monospace;color:var(--pink)}.enemy{display:inline-block;margin:7px 5px 0 0;padding:5px 9px;border-radius:7px;background:#120c1b;border:1px solid #634a7c;font-weight:700;font-size:13px}
+.empty{padding:40px 16px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:12px;margin-top:14px}
+footer{margin-top:18px;color:var(--muted);font-size:12px}.pool{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.pill{font-size:12px;padding:4px 8px;border-radius:99px;background:#281b39;border:1px solid var(--line);color:#dfd1f2}
+@media(max-width:700px){.layout{grid-template-columns:1fr}main{padding-top:18px}.panel{padding:15px}}
+</style>
+</head>
+<body><main>
+<div class="top"><div class="brand">GAME GOOFER LABS / PROTOTYPE 001</div><div class="chapter">DELTARUNE · CHAPTER 1 ONLY</div></div>
+<h1>PROTO<span>GOOFER</span></h1>
+<p class="sub">A tiny enemy-randomizer workbench for the Chapter 1 Dark World. Roll new encounter lineups, lock in a seed, and export the shuffle plan.</p>
+<div class="notice"><strong>Prototype status:</strong> This version randomizes encounter lineups and exports a JSON plan. It does <strong>not yet patch the Deltarune web port or change enemies inside the running game</strong>. The port uses a compiled GameMaker runtime, so direct in-game randomization needs a separate game-data patching step.</div>
+<div class="layout">
+<section class="panel">
+<h2>Randomizer settings</h2>
+<div class="field"><label for="seed">Seed</label><input id="seed" type="text" maxlength="40" value="GOOFER-001"><div class="hint">Same seed + settings = same encounter list.</div></div>
+<div class="field"><label for="count">Number of encounters</label><input id="count" type="number" min="1" max="40" value="12"></div>
+<div class="field"><label for="size">Enemies per encounter</label><input id="size" type="number" min="1" max="5" value="2"></div>
+<label class="check"><input id="dupes" type="checkbox"> Allow duplicate enemies in one encounter</label>
+<label class="check"><input id="bosses" type="checkbox"> Include special encounters (Lancer / King / Jevil)</label>
+<div class="field"><div class="row"><strong>Chapter 1 enemy pool</strong><span class="hint" id="poolCount"></span></div><div class="pool" id="pool"></div></div>
+<div class="actions"><button id="generate">GOOFERIZE!</button><button class="secondary" id="randomSeed">Random seed</button></div>
+</section>
+<section class="panel">
+<div class="results-head"><h2>Randomized encounters</h2><span class="seedtag" id="activeSeed">SEED: —</span></div>
+<div id="results" class="empty">Hit GOOFERIZE! to generate your Chapter 1 enemy shuffle.</div>
+<div class="actions"><button class="secondary" id="copy" disabled>Copy JSON</button><button class="secondary" id="download" disabled>Download JSON</button></div>
+<footer>Enemy names are a selectable prototype pool, not a verified map of every original encounter. Bosses are treated as special entries and are off by default.</footer>
+</section>
+</div>
+<div class="actions" style="margin-top:18px"><a class="linkbtn secondary" href="https://byalvaro19.github.io/deltarune/chapter1/" target="_blank" rel="noopener">Open Chapter 1 web port ↗</a><a class="linkbtn secondary" href="https://github.com/ByAlvaro19/deltarune" target="_blank" rel="noopener">View original project ↗</a></div>
+<footer>ProtoGoofer is an independent companion prototype. It does not include Deltarune game assets or modify the original project.</footer>
+</main>
+<script>
+const baseEnemies=["Rudinn","Hathy","Jigsawry","C. Round","Rabbick","Bloxer","Ponman","Rudinn Ranger","Head Hathy","K. Round"];
+const specialEnemies=["Lancer","King","Jevil"];
+let currentPlan=null;
+const $=id=>document.getElementById(id);
+$("pool").innerHTML=baseEnemies.map(n=>'<span class="pill">'+n+'</span>').join("");
+$("poolCount").textContent=baseEnemies.length+" enemies";
+function hashSeed(str){let h=2166136261;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function rng(seed){let a=seed>>>0;return()=>{a+=0x6D2B79F5;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296}}
+function generate(){
+ const seed=$("seed").value.trim()||"GOOFER";
+ const count=Math.max(1,Math.min(40,Number($("count").value)||12));
+ const size=Math.max(1,Math.min(5,Number($("size").value)||2));
+ const allowDupes=$("dupes").checked,includeBosses=$("bosses").checked;
+ const pool=includeBosses?baseEnemies.concat(specialEnemies):baseEnemies.slice();
+ const random=rng(hashSeed(seed));
+ const encounters=[];
+ for(let i=0;i<count;i++){
+   const picks=[];
+   for(let j=0;j<size;j++){
+     let available=allowDupes?pool:pool.filter(x=>!picks.includes(x));
+     if(!available.length)available=pool;
+     picks.push(available[Math.floor(random()*available.length)]);
+   }
+   encounters.push({number:i+1,enemies:picks});
+ }
+ currentPlan={tool:"ProtoGoofer",game:"Deltarune",chapter:1,mode:"encounter-lineup-randomizer",seed,settings:{encounterCount:count,enemiesPerEncounter:size,allowDuplicates:allowDupes,includeSpecialEncounters:includeBosses},encounters};
+ $("activeSeed").textContent="SEED: "+seed;
+ $("results").className="encounters";
+ $("results").innerHTML=encounters.map(e=>'<article class="encounter"><div class="num">ENCOUNTER '+String(e.number).padStart(2,"0")+'</div>'+e.enemies.map(n=>'<span class="enemy">'+n+'</span>').join("")+'</article>').join("");
+ $("copy").disabled=false;$("download").disabled=false;
+}
+$("generate").addEventListener("click",generate);
+$("randomSeed").addEventListener("click",()=>{$("seed").value="PG-"+Math.random().toString(36).slice(2,9).toUpperCase();generate()});
+$("copy").addEventListener("click",async()=>{if(!currentPlan)return;try{await navigator.clipboard.writeText(JSON.stringify(currentPlan,null,2));$("copy").textContent="Copied!";setTimeout(()=>$("copy").textContent="Copy JSON",1300)}catch(e){$("copy").textContent="Copy unavailable"}});
+$("download").addEventListener("click",()=>{if(!currentPlan)return;const blob=new Blob([JSON.stringify(currentPlan,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="protogoofer-ch1-"+currentPlan.seed.replace(/[^a-z0-9_-]/gi,"_")+".json";a.click();URL.revokeObjectURL(a.href)});
+generate();
+</script></body></html>
