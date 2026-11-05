@@ -39,3 +39,7 @@ The static app is published through GitHub Pages. Game Goofer itself does not ho
 ## Retired project infrastructure
 
 JDog Social has been removed from the public frontend and its public social API routes disabled in `worker.js`. The Worker source retains separate JoyGPT relay endpoints. Cloudflare deployment and storage cleanup must be done separately.
+
+## UNX Inspector (experimental)
+
+A read-only GameMaker `.unx` inspector is available at [UNX Inspector](https://jdogdabest67.github.io/linux/unx-inspector.html). It parses supported metadata and bytecode references locally in your browser. It does not upload, modify, or patch game files. See [BUILD-INSTRUCTIONS.md](BUILD-INSTRUCTIONS.md) and the [real-file technical report](docs/TECHNICAL-REPORT-REAL-FILE.md) for usage and limitations.
